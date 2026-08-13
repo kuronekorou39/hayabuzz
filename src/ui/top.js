@@ -1,3 +1,4 @@
+import mascotHero from '../assets/mascot/hero.webp'
 import { el } from '../util/dom.js'
 import { mountHost } from './host.js'
 import { mountPlayer } from './player.js'
@@ -5,6 +6,7 @@ import { mountPlayer } from './player.js'
 export function mountTop(app) {
   app.replaceChildren(
     el('div', { class: 'screen top-screen' }, [
+      el('img', { class: 'mascot-hero', src: mascotHero, alt: '' }),
       el('h1', { class: 'logo', text: 'Hayabuzz' }),
       el('p', { class: 'tagline', text: 'サーバレスP2P 早押しクイズ' }),
       el('button', {

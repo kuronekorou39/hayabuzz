@@ -578,10 +578,31 @@ textarea.input {
 }
 
 .result-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   text-align: center;
   border-radius: 10px;
-  padding: 10px;
+  padding: 8px 10px;
   font-weight: 700;
+}
+
+.result-mascot {
+  width: 52px;
+  border-radius: 12px;
+  flex: none;
+}
+
+.mascot-hero {
+  width: 150px;
+  align-self: center;
+  border-radius: 20px;
+}
+
+.overlay-mascot {
+  width: 110px;
+  border-radius: 16px;
 }
 
 .result-banner.ok {

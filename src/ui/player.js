@@ -1,3 +1,6 @@
+import mascotCorrect from '../assets/mascot/correct.webp'
+import mascotFlying from '../assets/mascot/flying.webp'
+import mascotWrong from '../assets/mascot/wrong.webp'
 import { playBuzz, playCorrect, playWrong, playYourTurn, setSoundEnabled, unlockAudio } from '../audio.js'
 import { CONFIG } from '../config.js'
 import { PHASE, PHASE_LABEL } from '../game/phases.js'
@@ -112,7 +115,9 @@ function startGame(app, roomCode, nick) {
 
   const rankEl = el('div', { class: 'stat', text: '順位 —' })
   const scoreEl = el('div', { class: 'stat', text: '得点 0' })
-  const resultEl = el('div', { class: 'result-banner hidden', text: '' })
+  const resultImg = el('img', { class: 'result-mascot', alt: '' })
+  const resultText = el('span', { text: '' })
+  const resultEl = el('div', { class: 'result-banner hidden' }, [resultImg, resultText])
 
   // --- 設定（ボタンの見た目 / 効果音） ---
   let styleClass = 'style-simple'
@@ -172,13 +177,15 @@ function startGame(app, roomCode, nick) {
   const overlayMessage = el('p', { text: '' })
   const overlayButtons = el('div', { class: 'btn-row' })
   const spinner = el('div', { class: 'spinner' })
-  const overlay = el('div', { class: 'overlay' }, [spinner, overlayTitle, overlayMessage, overlayButtons])
+  const overlayMascot = el('img', { class: 'overlay-mascot', alt: '' })
+  const overlay = el('div', { class: 'overlay' }, [overlayMascot, spinner, overlayTitle, overlayMessage, overlayButtons])
 
   function showOverlay(title, message, buttons, { withSpinner = false } = {}) {
     overlayTitle.textContent = title
     overlayMessage.textContent = message
     overlayButtons.replaceChildren(...buttons)
     spinner.classList.toggle('hidden', !withSpinner)
+    overlayMascot.src = withSpinner ? mascotFlying : mascotWrong // 待機中は飛ぶ姿、エラー時は困り顔
     overlay.classList.remove('hidden')
   }
 
@@ -299,13 +306,15 @@ function startGame(app, roomCode, nick) {
     if (snapshot.result !== null) {
       if (snapshot.result.correct) {
         const winner = snapshot.players.find((p) => p.playerId === snapshot.result.playerId)
-        resultEl.textContent =
+        resultText.textContent =
           snapshot.result.playerId === playerId
             ? '正解！ +1点'
             : `${winner !== undefined ? winner.nick : '？'} さんが正解`
+        resultImg.src = mascotCorrect
         resultEl.className = 'result-banner ok'
       } else {
-        resultEl.textContent = '正解者なし'
+        resultText.textContent = '正解者なし'
+        resultImg.src = mascotWrong
         resultEl.className = 'result-banner ng'
       }
     } else {

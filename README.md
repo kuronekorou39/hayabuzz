@@ -46,6 +46,9 @@ src/
 スプライトは `assets-src/`（git 管理外）の参考画像から
 `node scripts/extract-buzzer-sprites.mjs` で再生成できる。
 
+マスコット「クイズ隼人」はトップ画面・接続中オーバーレイ・正解/不正解バナー・
+ファビコンに表示している（`node scripts/extract-mascot.mjs` で再生成）。
+
 ## 開発
 
 ```sh

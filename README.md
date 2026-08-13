@@ -53,16 +53,24 @@ src/
 
 ```sh
 npm install
-npm run dev    # 開発サーバ（Trystero のトラッカー接続にインターネットが必要）
-npm test       # ユニットテスト（クロックオフセット推定・押下順判定）
-npm run e2e    # E2E スモークテスト（要: dev サーバ起動中 + Chrome インストール済み）
-npm run build  # docs/ に本番ビルドを出力
+npm run dev      # 開発サーバ（Trystero のトラッカー接続にインターネットが必要）
+npm test         # ユニットテスト（クロックオフセット推定・押下順判定）
+npm run test:e2e # E2E テスト（dev サーバは自動起動。初回のみ npx playwright install chromium）
+npm run test:all # 上記2つを続けて実行
+npm run build    # docs/ に本番ビルドを出力
 ```
 
-ローカル動作確認は `npm run dev` を起動し、ブラウザで複数タブ
-（出題者1 + 回答者N）を開けばできます。`npm run e2e` は Playwright で
-「部屋作成 → 参加 → 出題 → 早押し → 判定 → 再接続の得点引き継ぎ → host切断表示」を
-自動で通し確認します。
+## テスト
+
+- **ユニットテスト**（vitest / `tests/`）: クロックオフセット推定・押下順判定の純関数
+- **E2E テスト**（Playwright / `e2e/`）: 実際に Trystero で P2P 接続して検証する
+  - 基本フロー: 部屋作成 → 参加 → 出題 → 早押し → 正解 → 得点 → 再接続の得点引き継ぎ → host切断表示
+  - **複数端末**: 3人が別ブラウザコンテキスト（=別端末相当。うち1人は iPhone 相当の
+    タッチエミュレーション）で同時参加し、ほぼ同時押しの押下順・ms差、
+    不正解→次点へ、不正解→全員再開放（誤答者除外）、手動加減点の配信を検証
+  - 公開環境に対して実行する場合: `$env:E2E_BASE_URL='https://<user>.github.io/<repo>/'; npm run test:e2e`
+- **CI**: GitHub Actions（`.github/workflows/test.yml`）が push / PR ごとに両方を実行する。
+  E2E は公開トラッカー経由で実接続するため、稀に不安定な場合はリトライで吸収している。
 
 ## GitHub Pages へのデプロイ
 

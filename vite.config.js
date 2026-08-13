@@ -13,4 +13,8 @@ export default defineConfig({
     outDir: 'docs',
     emptyOutDir: true,
   },
+  test: {
+    // Playwright の e2e/*.spec.js を vitest が拾わないようユニットテストに限定する
+    include: ['tests/**/*.test.js'],
+  },
 })

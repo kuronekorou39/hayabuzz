@@ -1,10 +1,12 @@
 // E2E スモークテスト（Playwright + インストール済み Chrome を使用）
 // 前提: `npm run dev` が起動していること。実行: `npm run e2e`
+// 公開環境に対して実行する場合: E2E_BASE_URL=https://<user>.github.io/<repo>/ を設定
 // 検証内容: 部屋作成 → 参加 → 出題 → 早押し → 正解判定 → 得点反映 →
 //           再接続での得点引き継ぎ → host 切断時の「部屋が終了しました」表示
 import { chromium } from 'playwright'
 
-const BASE = 'http://127.0.0.1:5173/'
+const rawBase = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173/'
+const BASE = rawBase.endsWith('/') ? rawBase : `${rawBase}/`
 const log = (m) => console.log(`[e2e] ${m}`)
 
 const browser = await chromium.launch({

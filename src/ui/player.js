@@ -1,10 +1,12 @@
-import { playBuzz, unlockAudio } from '../audio.js'
+import { playBuzz, playCorrect, playWrong, playYourTurn, setSoundEnabled, unlockAudio } from '../audio.js'
 import { CONFIG } from '../config.js'
 import { PHASE, PHASE_LABEL } from '../game/phases.js'
 import { MSG, PROTO_VERSION, validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
+import { loadPrefs, savePrefs } from '../prefs.js'
 import { el } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
+import { BUZZER_STYLES, getBuzzerStyle } from './buzzer-styles.js'
 
 const SESSION_KEY = 'hayabuzz.sessionId'
 
@@ -85,6 +87,8 @@ export function mountPlayer(app, { roomCode = '' } = {}) {
 function startGame(app, roomCode, nick) {
   const sessionId = getSessionId()
   const transport = createTransport()
+  const prefs = loadPrefs()
+  setSoundEnabled(prefs.sound)
 
   let hostPeerId = null // welcome をくれたピア＝host。以後 host とのみ通信する（スター型）
   let playerId = null
@@ -98,10 +102,71 @@ function startGame(app, roomCode, nick) {
   const statusText = el('span', { class: 'status-text', text: '接続中' })
   const phaseEl = el('div', { class: 'phase-banner', text: '接続中…' })
   const questionEl = el('div', { class: 'question-text card', text: '' })
-  const buzzer = el('button', { class: 'buzzer', text: '接続中…' })
+
+  // 早押しボタン: 台（base）とボタン（cap）の2層 + 状態ラベル
+  const buzzerBase = el('img', { class: 'buzzer-base', alt: '', draggable: 'false' })
+  const buzzerCap = el('img', { class: 'buzzer-cap', alt: '', draggable: 'false' })
+  const buzzerLabel = el('span', { class: 'buzzer-label', text: '接続中…' })
+  const buzzerRig = el('div', { class: 'buzzer-rig' }, [buzzerBase, buzzerCap, buzzerLabel])
+  const buzzer = el('button', { class: 'buzzer' }, [buzzerRig])
+
   const rankEl = el('div', { class: 'stat', text: '順位 —' })
   const scoreEl = el('div', { class: 'stat', text: '得点 0' })
   const resultEl = el('div', { class: 'result-banner hidden', text: '' })
+
+  // --- 設定（ボタンの見た目 / 効果音） ---
+  let styleClass = 'style-simple'
+  let stateClasses = []
+
+  function applyBuzzerClasses() {
+    buzzer.className = ['buzzer', styleClass, ...stateClasses].join(' ')
+  }
+
+  function applyBuzzerStyle(styleId) {
+    const style = getBuzzerStyle(styleId)
+    if (style.base === undefined) {
+      styleClass = 'style-simple'
+    } else {
+      styleClass = 'style-img'
+      buzzerBase.src = style.base
+      buzzerCap.src = style.cap
+      buzzer.style.setProperty('--base-clip', style.baseClip)
+      buzzer.style.setProperty('--cap-clip', style.capClip)
+      buzzer.style.setProperty('--cap-w', style.capW)
+      buzzer.style.setProperty('--glow', style.glow)
+    }
+    applyBuzzerClasses()
+  }
+
+  const styleSelect = el(
+    'select',
+    { class: 'input' },
+    BUZZER_STYLES.map((s) => el('option', { value: s.id, text: s.label })),
+  )
+  styleSelect.value = getBuzzerStyle(prefs.buttonStyle).id
+  styleSelect.addEventListener('change', () => {
+    prefs.buttonStyle = styleSelect.value
+    savePrefs(prefs)
+    applyBuzzerStyle(prefs.buttonStyle)
+  })
+
+  const soundCheck = el('input', { type: 'checkbox' })
+  soundCheck.checked = prefs.sound
+  soundCheck.addEventListener('change', () => {
+    prefs.sound = soundCheck.checked
+    savePrefs(prefs)
+    setSoundEnabled(prefs.sound)
+  })
+
+  const settingsCard = el('div', { class: 'card settings-card hidden' }, [
+    el('label', { class: 'settings-row' }, [el('span', { text: 'ボタンの見た目' }), styleSelect]),
+    el('label', { class: 'settings-row' }, [el('span', { text: '効果音' }), soundCheck]),
+  ])
+  const settingsBtn = el('button', {
+    class: 'btn btn-small',
+    text: '設定',
+    onclick: () => settingsCard.classList.toggle('hidden'),
+  })
 
   const overlayTitle = el('h2', { text: '' })
   const overlayMessage = el('p', { text: '' })
@@ -128,8 +193,9 @@ function startGame(app, roomCode, nick) {
           el('span', { class: 'brand', text: 'Hayabuzz' }),
           el('span', { class: 'role', text: '回答者' }),
         ]),
-        el('div', { class: 'status' }, [statusDot, statusText]),
+        el('div', { class: 'status' }, [statusDot, statusText, settingsBtn]),
       ]),
+      settingsCard,
       phaseEl,
       questionEl,
       buzzer,
@@ -138,6 +204,7 @@ function startGame(app, roomCode, nick) {
     ]),
     overlay,
   )
+  applyBuzzerStyle(prefs.buttonStyle)
 
   showOverlay('接続しています…', `ルームコード: ${roomCode}`, [
     el('button', { class: 'btn', text: 'キャンセル', onclick: goTop }),
@@ -148,7 +215,7 @@ function startGame(app, roomCode, nick) {
     statusText.textContent = label
   }
 
-  // --- 早押しボタン ---
+  // --- 早押し ---
 
   function pressKey() {
     return snapshot !== null ? `${snapshot.qid}:${snapshot.armedAt}` : null
@@ -201,30 +268,33 @@ function startGame(app, roomCode, nick) {
     }
 
     const excluded = snapshot.excluded.includes(playerId)
-    buzzer.className = 'buzzer'
+    stateClasses = []
     if (excluded) {
-      buzzer.textContent = '誤答のため待機'
+      stateClasses.push('dim')
+      buzzerLabel.textContent = '誤答のため待機'
     } else if (snapshot.phase === PHASE.ARMED) {
       if (hasPressed()) {
-        buzzer.classList.add('pressed')
-        buzzer.textContent = '押した！'
+        stateClasses.push('pressed')
+        buzzerLabel.textContent = '押した！'
       } else {
-        buzzer.classList.add('armed')
-        buzzer.textContent = '押せ！'
+        stateClasses.push('armed')
+        buzzerLabel.textContent = '押せ！'
       }
     } else if (snapshot.phase === PHASE.LOCKED) {
       if (snapshot.activePlayerId === playerId) {
-        buzzer.classList.add('mine')
-        buzzer.textContent = '回答してください！'
+        stateClasses.push('mine')
+        buzzerLabel.textContent = '回答してください！'
       } else {
-        buzzer.classList.add('pressed')
-        buzzer.textContent = 'ロック中'
+        stateClasses.push(hasPressed() ? 'pressed' : 'dim')
+        buzzerLabel.textContent = 'ロック中'
       }
     } else if (snapshot.phase === PHASE.QUESTION) {
-      buzzer.textContent = 'まだ押せません'
+      buzzerLabel.textContent = 'まだ押せません'
     } else {
-      buzzer.textContent = '待機中'
+      stateClasses.push('dim')
+      buzzerLabel.textContent = '待機中'
     }
+    applyBuzzerClasses()
 
     if (snapshot.result !== null) {
       if (snapshot.result.correct) {
@@ -240,6 +310,23 @@ function startGame(app, roomCode, nick) {
       }
     } else {
       resultEl.className = 'result-banner hidden'
+    }
+  }
+
+  // 前回スナップショットとの差分から効果音を鳴らす
+  function notifyTransitions(prev, next) {
+    // 回答権が自分に回ってきた
+    if (next.phase === PHASE.LOCKED && next.activePlayerId === playerId && prev.activePlayerId !== playerId) {
+      playYourTurn()
+    }
+    // 自分が誤答と判定された（除外に追加された）
+    if (next.excluded.includes(playerId) && !prev.excluded.includes(playerId)) {
+      playWrong()
+    }
+    // 判定結果が出た
+    if (next.result !== null && prev.result === null) {
+      if (next.result.correct) playCorrect()
+      else playWrong()
     }
   }
 
@@ -291,10 +378,13 @@ function startGame(app, roomCode, nick) {
       case MSG.PING:
         transport.send({ type: MSG.PONG, seq: raw.seq, t: performance.now() }, hostPeerId)
         break
-      case MSG.STATE:
+      case MSG.STATE: {
+        const prev = snapshot
         snapshot = raw
+        if (prev !== null) notifyTransitions(prev, raw)
         renderState()
         break
+      }
     }
   })
 

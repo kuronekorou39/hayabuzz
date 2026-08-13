@@ -1,2 +1,5 @@
 node_modules/
 # docs/ は GitHub Pages の公開ディレクトリなのでコミットする（ignoreしない）
+
+# スプライト切り出し元の大きな参考画像（生成物 src/assets/buzzer/ をコミットする）
+assets-src/

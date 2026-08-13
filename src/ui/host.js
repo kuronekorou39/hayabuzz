@@ -1,15 +1,18 @@
 import QRCode from 'qrcode'
-import { playLock, unlockAudio } from '../audio.js'
+import { playCorrect, playLock, playWrong, setSoundEnabled, unlockAudio } from '../audio.js'
 import { CONFIG } from '../config.js'
 import { HostGame } from '../game/host-game.js'
 import { PHASE, PHASE_LABEL } from '../game/phases.js'
 import { validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
+import { loadPrefs, savePrefs } from '../prefs.js'
 import { el } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
 
 export function mountHost(app) {
   unlockAudio() // トップ画面のクリック（ユーザー操作）を起点に AudioContext を有効化
+  const prefs = loadPrefs()
+  setSoundEnabled(prefs.sound)
 
   const roomCode = randomCode(CONFIG.roomCodeLen)
   const joinUrl = `${location.origin}${location.pathname}${location.search}#/join/${roomCode}`
@@ -54,9 +57,26 @@ export function mountHost(app) {
   const currentQuestionEl = el('div', { class: 'question-text', text: 'まだ問題がありません' })
   const orderList = el('ol', { class: 'order-list' })
   const orderPlaceholder = el('p', { class: 'placeholder', text: 'まだ誰も押していません' })
-  const correctBtn = el('button', { class: 'btn btn-ok', text: '正解', onclick: () => game.judgeCorrect() })
-  const wrongNextBtn = el('button', { class: 'btn btn-ng', text: '不正解→次点へ', onclick: () => game.judgeWrongNext() })
-  const wrongOpenBtn = el('button', { class: 'btn btn-ng', text: '不正解→全員再開放', onclick: () => game.judgeWrongReopen() })
+  const correctBtn = el('button', { class: 'btn btn-ok', text: '正解', onclick: () => {
+    playCorrect()
+    game.judgeCorrect()
+  } })
+  const wrongNextBtn = el('button', { class: 'btn btn-ng', text: '不正解→次点へ', onclick: () => {
+    playWrong()
+    game.judgeWrongNext()
+  } })
+  const wrongOpenBtn = el('button', { class: 'btn btn-ng', text: '不正解→全員再開放', onclick: () => {
+    playWrong()
+    game.judgeWrongReopen()
+  } })
+
+  const soundCheck = el('input', { type: 'checkbox' })
+  soundCheck.checked = prefs.sound
+  soundCheck.addEventListener('change', () => {
+    prefs.sound = soundCheck.checked
+    savePrefs(prefs)
+    setSoundEnabled(prefs.sound)
+  })
 
   const scoreRows = el('div', { class: 'score-rows' })
   const scorePlaceholder = el('p', { class: 'placeholder', text: '参加者を待っています。QRコードまたはURLを共有してください。' })
@@ -87,6 +107,7 @@ export function mountHost(app) {
         orderPlaceholder,
         orderList,
         el('div', { class: 'btn-row' }, [correctBtn, wrongNextBtn, wrongOpenBtn]),
+        el('label', { class: 'settings-row' }, [el('span', { text: '効果音（この端末で鳴らす）' }), soundCheck]),
       ]),
       el('div', { class: 'card' }, [
         el('h2', { text: '得点表' }),

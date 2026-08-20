@@ -3,6 +3,7 @@ import { playCorrect, playLock, playWrong, setSoundEnabled, unlockAudio } from '
 import { CONFIG } from '../config.js'
 import { HostGame } from '../game/host-game.js'
 import { PHASE, PHASE_LABEL } from '../game/phases.js'
+import { teamMeta, teamTotals } from '../game/teams.js'
 import { validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
@@ -86,8 +87,10 @@ export function mountHost(app) {
   // --- 参加者・得点カード（ロビーと進行画面で共用） ---
   const scoreRows = el('div', { class: 'score-rows' })
   const scorePlaceholder = el('p', { class: 'placeholder', text: 'まだ参加者がいません' })
+  const teamTotalsRow = el('div', { class: 'team-totals' })
   const scoreCard = el('div', { class: 'card' }, [
     el('h2', { text: '参加者・得点' }),
+    teamTotalsRow,
     scorePlaceholder,
     scoreRows,
   ])
@@ -122,6 +125,10 @@ export function mountHost(app) {
   const wrongOpenBtn = el('button', { class: 'btn btn-ng', text: '不正解→全員再開放', onclick: () => {
     playWrong()
     game.judgeWrongReopen()
+  } })
+  const wrongTeamBtn = el('button', { class: 'btn btn-ng', text: '不正解→他チームに開放', onclick: () => {
+    playWrong()
+    game.judgeWrongOpenOtherTeams()
   } })
 
   const soundCheck = el('input', { type: 'checkbox' })
@@ -165,6 +172,27 @@ export function mountHost(app) {
   const nickResumeCheck = el('input', { type: 'checkbox' })
   nickResumeCheck.addEventListener('change', () => game.setNickResume(nickResumeCheck.checked))
 
+  const teamsSelect = el('select', { class: 'input' }, [
+    el('option', { value: '0', text: 'なし（個人戦）' }),
+    el('option', { value: '2', text: '2チーム' }),
+    el('option', { value: '3', text: '3チーム' }),
+    el('option', { value: '4', text: '4チーム' }),
+  ])
+  teamsSelect.addEventListener('change', () => game.setTeams(Number(teamsSelect.value)))
+  const shuffleBtn = el('button', { class: 'btn btn-small', text: 'シャッフル', onclick: () => game.shuffleTeams() })
+
+  const correctPointsSelect = el('select', { class: 'input' },
+    [1, 2, 3, 5, 10].map((n) => el('option', { value: String(n), text: `+${n}点` })))
+  correctPointsSelect.addEventListener('change', () => game.setCorrectPoints(Number(correctPointsSelect.value)))
+
+  const wrongPointsSelect = el('select', { class: 'input' },
+    [0, -1, -2, -5].map((n) => el('option', { value: String(n), text: n === 0 ? 'なし' : `${n}点` })))
+  wrongPointsSelect.addEventListener('change', () => game.setWrongPoints(Number(wrongPointsSelect.value)))
+
+  const winScoreSelect = el('select', { class: 'input' },
+    [0, 5, 7, 10].map((n) => el('option', { value: String(n), text: n === 0 ? 'なし' : `${n}点` })))
+  winScoreSelect.addEventListener('change', () => game.setWinScore(Number(winScoreSelect.value)))
+
   const handicapRows = el('div', { class: 'score-rows' })
   const handicapPlaceholder = el('p', { class: 'placeholder', text: 'まだ参加者がいません' })
   const rulesOverlay = el('div', { class: 'overlay rules-overlay hidden' }, [
@@ -173,6 +201,10 @@ export function mountHost(app) {
       el('label', { class: 'settings-row' }, [el('span', { text: '問題の表示' }), revealSelect]),
       el('label', { class: 'settings-row' }, [el('span', { text: '読み上げ速度' }), revealSpeedSelect]),
       el('label', { class: 'settings-row' }, [el('span', { text: '押下音' }), pressSoundSelect]),
+      el('label', { class: 'settings-row' }, [el('span', { text: '正解の得点' }), correctPointsSelect]),
+      el('label', { class: 'settings-row' }, [el('span', { text: '誤答の得点' }), wrongPointsSelect]),
+      el('label', { class: 'settings-row' }, [el('span', { text: '勝ち抜けライン' }), winScoreSelect]),
+      el('label', { class: 'settings-row' }, [el('span', { text: 'チーム戦' }), teamsSelect, shuffleBtn]),
       el('label', { class: 'settings-row' }, [
         el('span', { text: '同名での復帰（得点引き継ぎ）' }),
         nickResumeCheck,
@@ -189,6 +221,10 @@ export function mountHost(app) {
     revealSpeedSelect.value = String(game.rules.revealCps)
     pressSoundSelect.value = game.rules.pressSound
     nickResumeCheck.checked = game.rules.nickResume
+    correctPointsSelect.value = String(game.rules.correctPoints)
+    wrongPointsSelect.value = String(game.rules.wrongPoints)
+    winScoreSelect.value = String(game.rules.winScore)
+    teamsSelect.value = String(game.rules.teams)
     const players = [...game.players.values()]
     handicapPlaceholder.style.display = players.length === 0 ? '' : 'none'
     handicapRows.replaceChildren(
@@ -242,7 +278,7 @@ export function mountHost(app) {
           orderPlaceholder,
           orderList,
           resultLine,
-          el('div', { class: 'btn-row' }, [correctBtn, wrongNextBtn, wrongOpenBtn]),
+          el('div', { class: 'btn-row' }, [correctBtn, wrongNextBtn, wrongOpenBtn, wrongTeamBtn]),
           el('label', { class: 'settings-row' }, [el('span', { text: '効果音（この端末で鳴らす）' }), soundCheck]),
         ]),
         scoreCard,
@@ -310,6 +346,21 @@ export function mountHost(app) {
     correctBtn.disabled = !canJudge
     wrongNextBtn.disabled = !canJudge
     wrongOpenBtn.disabled = !canJudge
+    wrongTeamBtn.disabled = !canJudge
+    wrongTeamBtn.style.display = game.rules.teams === 0 ? 'none' : ''
+
+    // チーム合計（チーム戦のみ）
+    if (game.rules.teams > 0) {
+      const players = [...game.players.values()]
+      teamTotalsRow.replaceChildren(
+        ...teamTotals(players, game.rules.teams).map((t) => {
+          const meta = teamMeta(t.team)
+          return el('span', { class: `team-chip ${meta.cls}`, text: `${meta.label} ${t.score}点` })
+        }),
+      )
+    } else {
+      teamTotalsRow.replaceChildren()
+    }
 
     // 判定結果の表示
     if (game.result !== null) {
@@ -349,10 +400,22 @@ export function mountHost(app) {
     const players = [...game.players.values()]
     scorePlaceholder.style.display = players.length === 0 ? '' : 'none'
     scoreRows.replaceChildren(
-      ...players.map((p) =>
-        el('div', { class: 'score-row' }, [
+      ...players.map((p) => {
+        const meta = game.rules.teams > 0 ? teamMeta(p.team) : null
+        return el('div', { class: 'score-row' }, [
           el('span', { class: p.connected ? 'dot on' : 'dot off' }),
+          // タップでチームを順に切り替えられる
+          ...(meta !== null
+            ? [el('button', {
+                class: `team-chip ${meta.cls}`,
+                text: meta.label,
+                onclick: () => game.cycleTeam(p.sessionId),
+              })]
+            : []),
           el('span', { class: 'score-nick', text: p.nick }),
+          ...(game.rules.winScore > 0 && p.score >= game.rules.winScore
+            ? [el('span', { class: 'badge win', text: '勝ち抜け' })]
+            : []),
           ...(p.handicapMs > 0
             ? [el('span', { class: 'handicap-note', text: `ハンデ+${p.handicapMs}ms` })]
             : []),
@@ -363,8 +426,8 @@ export function mountHost(app) {
           el('span', { class: 'score-value', text: String(p.score) }),
           el('button', { class: 'btn btn-mini', text: '−', onclick: () => game.adjustScore(p.sessionId, -1) }),
           el('button', { class: 'btn btn-mini', text: '＋', onclick: () => game.adjustScore(p.sessionId, 1) }),
-        ]),
-      ),
+        ])
+      }),
     )
   }
 

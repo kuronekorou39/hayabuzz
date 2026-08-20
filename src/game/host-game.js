@@ -28,6 +28,10 @@ export class HostGame {
       nickResume: true, // 切断中の同名プレイヤーへの復帰（得点引き継ぎ）を許可するか
       reveal: 'all', // 問題文の表示: 'all'=一括 / 'serial'=読み上げ（早押し開始で流れる）
       revealCps: 7, // 読み上げ速度（文字/秒）
+      correctPoints: 1, // 正解の得点
+      wrongPoints: 0, // 誤答の得点（0以下のペナルティ）
+      winScore: 0, // 勝ち抜けライン（0=なし。達した人に「勝ち抜け」表示）
+      teams: 0, // チーム数（0=個人戦、2〜4）
     }
     this.revealBase = 0 // 読み上げの確定位置（文字数）。押下で凍結し、再開放で続きから
   }
@@ -82,6 +86,7 @@ export class HostGame {
         nick: '',
         score: 0,
         handicapMs: 0, // 押下時刻に加算するハンデ（順位判定に反映）
+        team: 0, // 所属チーム（0=未所属）
         peerId: null,
         connected: false,
         sync: new PeerSync(),
@@ -89,6 +94,7 @@ export class HostGame {
         refreshInterval: null,
       }
       this.players.set(msg.sessionId, player)
+      this.#autoAssignTeam(player)
     }
     player.nick = requestedNick !== '' ? requestedNick : 'ななし'
     player.peerId = peerId
@@ -190,16 +196,23 @@ export class HostGame {
   judgeCorrect() {
     if (this.phase !== PHASE.LOCKED || this.activePlayerId === null) return
     const player = this.players.get(this.activePlayerId)
-    if (player) player.score += 1
+    if (player) player.score += this.rules.correctPoints
     this.result = { playerId: this.activePlayerId, correct: true }
     this.phase = PHASE.RESULT
     this.revealBase = this.questionText.length // 決着したので問題文を全文表示する
     this.#changed()
   }
 
+  // 誤答ペナルティ（ルールで 0 以下の得点を設定できる）
+  #applyWrongPenalty(playerId) {
+    const player = this.players.get(playerId)
+    if (player) player.score += this.rules.wrongPoints
+  }
+
   // 不正解: 次点者に権利を回す
   judgeWrongNext() {
     if (this.phase !== PHASE.LOCKED || this.activePlayerId === null) return
+    this.#applyWrongPenalty(this.activePlayerId)
     this.excluded.add(this.activePlayerId)
     const next = pickActive(this.order, this.excluded)
     if (next !== null) {
@@ -217,7 +230,25 @@ export class HostGame {
   // 不正解: 全員に再開放（誤答者は除外）
   judgeWrongReopen() {
     if (this.phase !== PHASE.LOCKED || this.activePlayerId === null) return
+    this.#applyWrongPenalty(this.activePlayerId)
     this.excluded.add(this.activePlayerId)
+    this.#reopen()
+  }
+
+  // 不正解: 誤答者のチーム全員を除外して他チームに開放（チーム戦のみ）
+  judgeWrongOpenOtherTeams() {
+    if (this.phase !== PHASE.LOCKED || this.activePlayerId === null) return
+    if (this.rules.teams === 0) return
+    const wrongPlayer = this.players.get(this.activePlayerId)
+    if (!wrongPlayer) return
+    this.#applyWrongPenalty(this.activePlayerId)
+    for (const player of this.players.values()) {
+      if (player.team === wrongPlayer.team) this.excluded.add(player.sessionId)
+    }
+    this.#reopen()
+  }
+
+  #reopen() {
     this.presses = []
     this.order = []
     this.activePlayerId = null
@@ -259,6 +290,78 @@ export class HostGame {
     if (![4, 7, 12].includes(cps)) return // ゆっくり/ふつう/はやい
     this.rules.revealCps = cps
     this.#changed()
+  }
+
+  setCorrectPoints(value) {
+    const points = Number(value)
+    if (![1, 2, 3, 5, 10].includes(points)) return
+    this.rules.correctPoints = points
+    this.#changed()
+  }
+
+  setWrongPoints(value) {
+    const points = Number(value)
+    if (![0, -1, -2, -5].includes(points)) return
+    this.rules.wrongPoints = points
+    this.#changed()
+  }
+
+  setWinScore(value) {
+    const score = Number(value)
+    if (![0, 5, 7, 10].includes(score)) return
+    this.rules.winScore = score
+    this.#changed()
+  }
+
+  // ---- チーム ----
+
+  setTeams(value) {
+    const count = Number(value)
+    if (![0, 2, 3, 4].includes(count)) return
+    this.rules.teams = count
+    // 参加順で均等に割り直す（0 なら個人戦に戻す）
+    let index = 0
+    for (const player of this.players.values()) {
+      player.team = count === 0 ? 0 : (index % count) + 1
+      index += 1
+    }
+    this.#changed()
+  }
+
+  cycleTeam(playerId) {
+    if (this.rules.teams === 0) return
+    const player = this.players.get(playerId)
+    if (!player) return
+    player.team = (player.team % this.rules.teams) + 1
+    this.#changed()
+  }
+
+  shuffleTeams() {
+    if (this.rules.teams === 0) return
+    const players = [...this.players.values()]
+    for (let i = players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[players[i], players[j]] = [players[j], players[i]]
+    }
+    players.forEach((player, index) => {
+      player.team = (index % this.rules.teams) + 1
+    })
+    this.#changed()
+  }
+
+  // 途中参加者は人数が最少のチームへ入れる
+  #autoAssignTeam(player) {
+    if (this.rules.teams === 0) return
+    const counts = new Array(this.rules.teams + 1).fill(0)
+    for (const p of this.players.values()) {
+      if (p.team >= 1) counts[p.team] += 1
+    }
+    counts[player.team] -= 1 // 自分自身は数えない
+    let best = 1
+    for (let team = 2; team <= this.rules.teams; team++) {
+      if (counts[team] < counts[best]) best = team
+    }
+    player.team = best
   }
 
   setHandicap(playerId, ms) {
@@ -358,6 +461,7 @@ export class HostGame {
         score: p.score,
         connected: p.connected,
         handicapMs: p.handicapMs,
+        team: p.team,
       })),
       order: this.order.map((o) => ({
         playerId: o.playerId,

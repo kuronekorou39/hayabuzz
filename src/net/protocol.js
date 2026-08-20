@@ -47,7 +47,9 @@ const SCHEMAS = {
     qid: isNum,
     questionText: str0(CONFIG.questionMaxLen),
     armedAt: nullable(isNum), // 早押し受付開始の host 時刻（フライング判定の基準）
-    players: arrayOf(shapeOf({ playerId: id, nick, score: isNum, connected: isBool, handicapMs: isNum })),
+    players: arrayOf(
+      shapeOf({ playerId: id, nick, score: isNum, connected: isBool, handicapMs: isNum, team: isNum }),
+    ),
     order: arrayOf(shapeOf({ playerId: id, deltaMs: isNum })),
     activePlayerId: nullable(id), // 回答権を持つ player
     excluded: arrayOf(id),
@@ -57,6 +59,10 @@ const SCHEMAS = {
       nickResume: isBool,
       reveal: oneOf(['all', 'serial']),
       revealCps: isNum,
+      correctPoints: isNum,
+      wrongPoints: isNum,
+      winScore: isNum,
+      teams: isNum,
     }),
     revealBase: isNum, // 読み上げ（順次表示）の確定位置
   },

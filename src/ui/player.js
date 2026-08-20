@@ -3,6 +3,7 @@ import { CONFIG } from '../config.js'
 import { PHASE, PHASE_LABEL } from '../game/phases.js'
 import { MSG, PROTO_VERSION, validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
+import { teamMeta, teamTotals } from '../game/teams.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
 import { el } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
@@ -133,15 +134,17 @@ function startGame(app, roomCode, nick) {
   const buzzerRig = el('div', { class: 'buzzer-rig' }, [buzzerBase, buzzerCap, buzzerLabel])
   const buzzer = el('button', { class: 'buzzer' }, [buzzerRig])
 
-  // 下部バー: 自分の得点の要約 + 得点表を開くボタン
+  // 下部バー: 自分の所属チーム・得点の要約 + 得点表を開くボタン
+  const myTeamChip = el('span', { class: 'team-chip hidden', text: '' })
   const meSummary = el('span', { class: 'me-summary', text: '—' })
+  const boardTotals = el('div', { class: 'team-totals' })
   const boardRows = el('div', { class: 'board-rows' })
   const boardOverlay = el('div', { class: 'overlay board-overlay hidden' }, [
-    el('div', { class: 'card board-card' }, [el('h2', { text: '得点表' }), boardRows]),
+    el('div', { class: 'card board-card' }, [el('h2', { text: '得点表' }), boardTotals, boardRows]),
     el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => boardOverlay.classList.add('hidden') }),
   ])
   const bottomBar = el('div', { class: 'bottom-bar' }, [
-    meSummary,
+    el('span', { class: 'bottom-me' }, [myTeamChip, meSummary]),
     el('button', { class: 'btn btn-small', text: '得点表', onclick: () => boardOverlay.classList.remove('hidden') }),
   ])
 
@@ -419,23 +422,46 @@ function startGame(app, roomCode, nick) {
         meSummary.classList.add('pop')
       }
       lastScore = me.score
+      // 所属チームの表示
+      const myMeta = snapshot.rules.teams > 0 ? teamMeta(me.team) : null
+      if (myMeta !== null) {
+        myTeamChip.textContent = myMeta.label
+        myTeamChip.className = `team-chip ${myMeta.cls}`
+      } else {
+        myTeamChip.className = 'team-chip hidden'
+      }
     } else {
       meSummary.textContent = '—'
     }
 
     // 得点表（オーバーレイの中身。開いたときに最新になるよう常に更新しておく）
+    if (snapshot.rules.teams > 0) {
+      boardTotals.replaceChildren(
+        ...teamTotals(snapshot.players, snapshot.rules.teams).map((t) => {
+          const meta = teamMeta(t.team)
+          return el('span', { class: `team-chip ${meta.cls}`, text: `${meta.label} ${t.score}点` })
+        }),
+      )
+    } else {
+      boardTotals.replaceChildren()
+    }
     const board = [...snapshot.players].sort((a, b) => b.score - a.score)
     boardRows.replaceChildren(
-      ...board.map((p) =>
-        el('div', { class: p.playerId === playerId ? 'board-row me' : 'board-row' }, [
+      ...board.map((p) => {
+        const meta = snapshot.rules.teams > 0 ? teamMeta(p.team) : null
+        return el('div', { class: p.playerId === playerId ? 'board-row me' : 'board-row' }, [
           el('span', { class: p.connected ? 'dot on' : 'dot off' }),
+          ...(meta !== null ? [el('span', { class: `team-chip ${meta.cls}`, text: meta.label })] : []),
           el('span', { class: 'board-nick', text: p.nick }),
+          ...(snapshot.rules.winScore > 0 && p.score >= snapshot.rules.winScore
+            ? [el('span', { class: 'badge win', text: '勝ち抜け' })]
+            : []),
           ...(p.handicapMs > 0
             ? [el('span', { class: 'handicap-note', text: `ハンデ+${p.handicapMs}ms` })]
             : []),
           el('span', { class: 'board-score', text: `${p.score}点` }),
-        ]),
-      ),
+        ])
+      }),
     )
   }
 
@@ -456,6 +482,19 @@ function startGame(app, roomCode, nick) {
     if (next.excluded.includes(playerId) && !prev.excluded.includes(playerId)) {
       playWrong()
       showToast('不正解…', 'ng')
+    }
+    // 勝ち抜けラインに到達した
+    if (next.rules.winScore > 0) {
+      const prevMe = prev.players.find((p) => p.playerId === playerId)
+      const nextMe = next.players.find((p) => p.playerId === playerId)
+      if (
+        prevMe !== undefined &&
+        nextMe !== undefined &&
+        prevMe.score < next.rules.winScore &&
+        nextMe.score >= next.rules.winScore
+      ) {
+        showToast('勝ち抜け！', 'ok')
+      }
     }
     // 判定結果が出た
     if (next.result !== null && prev.result === null) {

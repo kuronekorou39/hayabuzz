@@ -52,7 +52,13 @@ const SCHEMAS = {
     activePlayerId: nullable(id), // 回答権を持つ player
     excluded: arrayOf(id),
     result: nullable(shapeOf({ playerId: nullable(id), correct: isBool })),
-    rules: shapeOf({ pressSound: oneOf(['winner', 'all']) }),
+    rules: shapeOf({
+      pressSound: oneOf(['winner', 'all']),
+      nickResume: isBool,
+      reveal: oneOf(['all', 'serial']),
+      revealCps: isNum,
+    }),
+    revealBase: isNum, // 読み上げ（順次表示）の確定位置
   },
 }
 

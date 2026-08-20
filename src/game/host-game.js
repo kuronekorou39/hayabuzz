@@ -23,7 +23,13 @@ export class HostGame {
     this.activePlayerId = null
     this.result = null // { playerId, correct } | null
     // 部屋のルール（host が変更し、state で全員に配信される）
-    this.rules = { pressSound: 'winner' } // 押下音: 'winner'=回答権を得た人だけ / 'all'=押した全員
+    this.rules = {
+      pressSound: 'winner', // 押下音: 'winner'=回答権を得た人だけ / 'all'=押した全員
+      nickResume: true, // 切断中の同名プレイヤーへの復帰（得点引き継ぎ）を許可するか
+      reveal: 'all', // 問題文の表示: 'all'=一括 / 'serial'=読み上げ（早押し開始で流れる）
+      revealCps: 7, // 読み上げ速度（文字/秒）
+    }
+    this.revealBase = 0 // 読み上げの確定位置（文字数）。押下で凍結し、再開放で続きから
   }
 
   // ---- 受信メッセージ（検証済みのものだけ渡すこと） ----
@@ -55,9 +61,10 @@ export class HostGame {
     const requestedNick = msg.nick.trim().slice(0, CONFIG.nickMaxLen)
     let player = this.players.get(msg.sessionId)
     let resumed = player !== undefined
-    if (!player) {
+    if (!player && this.rules.nickResume) {
       // タブを閉じる等で sessionId が変わっても、切断中の同名プレイヤーがいれば
-      // 同一人物とみなして得点ごと引き継ぐ（接続中のプレイヤーの乗っ取りは不可）
+      // 同一人物とみなして得点ごと引き継ぐ（接続中のプレイヤーの乗っ取りは不可。
+      // ルールで無効化できる）
       const orphan = [...this.players.values()].find((p) => !p.connected && p.nick === requestedNick)
       if (orphan !== undefined) {
         this.#migratePlayerId(orphan.sessionId, msg.sessionId)
@@ -114,11 +121,24 @@ export class HostGame {
     this.#rejudge()
   }
 
+  // 読み上げ（順次表示）の現在位置を確定させる。押下・停止のタイミングで呼ぶ
+  #freezeReveal() {
+    if (this.rules.reveal !== 'serial' || this.armedAt === null) return
+    const elapsedSec = Math.max(0, this.now() - this.armedAt) / 1000
+    this.revealBase = Math.min(
+      this.questionText.length,
+      this.revealBase + this.rules.revealCps * elapsedSec,
+    )
+  }
+
   // 押下順を判定し直す。遅れて届いた「実際はより早い押下」も正しく順位に反映される
   #rejudge() {
     const { order } = judgeBuzzes({ armedAt: this.armedAt, presses: this.presses })
     this.order = order
-    if (this.phase === PHASE.ARMED && order.length > 0) this.phase = PHASE.LOCKED
+    if (this.phase === PHASE.ARMED && order.length > 0) {
+      this.#freezeReveal() // 誰かが押したら読み上げを止める
+      this.phase = PHASE.LOCKED
+    }
     if (this.phase === PHASE.LOCKED) {
       this.activePlayerId = pickActive(order, this.excluded)
     }
@@ -138,10 +158,12 @@ export class HostGame {
     this.excluded.clear()
     this.activePlayerId = null
     this.result = null
+    this.revealBase = 0 // 読み上げは新しい問題の先頭から
     this.#changed()
   }
 
-  // 早押し受付を開始。armedAt（host 時刻）が state に載り、これより前の押下は無効
+  // 早押し受付を開始。armedAt（host 時刻）が state に載り、これより前の押下は無効。
+  // 順次表示ルールでは読み上げもここから（revealBase の続きから）流れる
   arm() {
     if (this.phase !== PHASE.QUESTION) return
     this.armedAt = this.now()
@@ -156,6 +178,7 @@ export class HostGame {
   // 誤押下のキャンセル手段として、判定待ち（LOCKED）からも戻せる
   stop() {
     if (this.phase !== PHASE.ARMED && this.phase !== PHASE.LOCKED) return
+    this.#freezeReveal()
     this.phase = PHASE.QUESTION
     this.armedAt = null
     this.presses = []
@@ -170,6 +193,7 @@ export class HostGame {
     if (player) player.score += 1
     this.result = { playerId: this.activePlayerId, correct: true }
     this.phase = PHASE.RESULT
+    this.revealBase = this.questionText.length // 決着したので問題文を全文表示する
     this.#changed()
   }
 
@@ -185,6 +209,7 @@ export class HostGame {
       this.result = { playerId: null, correct: false }
       this.activePlayerId = null
       this.phase = PHASE.RESULT
+      this.revealBase = this.questionText.length // 決着したので問題文を全文表示する
     }
     this.#changed()
   }
@@ -214,6 +239,25 @@ export class HostGame {
   setPressSound(value) {
     if (value !== 'winner' && value !== 'all') return
     this.rules.pressSound = value
+    this.#changed()
+  }
+
+  setNickResume(value) {
+    if (typeof value !== 'boolean') return
+    this.rules.nickResume = value
+    this.#changed()
+  }
+
+  setReveal(value) {
+    if (value !== 'all' && value !== 'serial') return
+    this.rules.reveal = value
+    this.#changed()
+  }
+
+  setRevealCps(value) {
+    const cps = Number(value)
+    if (![4, 7, 12].includes(cps)) return // ゆっくり/ふつう/はやい
+    this.rules.revealCps = cps
     this.#changed()
   }
 
@@ -322,7 +366,8 @@ export class HostGame {
       activePlayerId: this.activePlayerId,
       excluded: [...this.excluded],
       result: this.result,
-      rules: { pressSound: this.rules.pressSound },
+      rules: { ...this.rules },
+      revealBase: Math.round(this.revealBase * 10) / 10,
     }
   }
 

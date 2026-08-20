@@ -649,6 +649,42 @@ textarea.input {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
   transition: opacity 0.6s;
   overflow-wrap: anywhere;
+  animation: toast-in 0.25s ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+/* 出現アニメーション（新しい問題・押下順の行） */
+@keyframes fade-slide {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+}
+
+.question-text.appear {
+  animation: fade-slide 0.35s ease-out;
+}
+
+.order-row {
+  animation: fade-slide 0.25s ease-out;
+}
+
+/* 得点が変わったときのポップ */
+.me-summary.pop {
+  animation: score-pop 0.4s ease-out;
+}
+
+@keyframes score-pop {
+  40% {
+    transform: scale(1.25);
+    color: var(--ok);
+  }
 }
 
 .toast.ok {
@@ -802,10 +838,14 @@ textarea.input {
   }
 }
 
-/* 動きを抑える設定の端末では点滅・発光アニメーションを止める */
+/* 動きを抑える設定の端末では点滅・発光・出現アニメーションを止める */
 @media (prefers-reduced-motion: reduce) {
   .buzzer.armed .buzzer-cap,
-  .dot.wait {
+  .dot.wait,
+  .toast,
+  .question-text.appear,
+  .order-row,
+  .me-summary.pop {
     animation: none;
   }
 }

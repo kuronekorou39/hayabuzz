@@ -304,13 +304,75 @@ function startGame(app, roomCode, nick) {
   }
   buzzer.addEventListener('contextmenu', (ev) => ev.preventDefault())
 
+  // --- 問題文の表示（順次表示ルールでは読み上げアニメーションつき） ---
+  let revealTimer = null
+  let armedSeenAt = 0 // ARMED 状態を受信したローカル時刻（読み上げ経過の基準）
+  let lastArmedKey = null
+
+  function stopRevealAnim() {
+    if (revealTimer !== null) {
+      clearInterval(revealTimer)
+      revealTimer = null
+    }
+  }
+
+  function serialQuestionText(chars) {
+    const text = snapshot.questionText
+    const count = Math.min(text.length, Math.floor(chars))
+    return count <= 0 ? '（早押し開始で問題文が読み上げられます）' : text.slice(0, count)
+  }
+
+  function renderRevealFrame() {
+    if (snapshot === null || snapshot.phase !== PHASE.ARMED) {
+      stopRevealAnim()
+      return
+    }
+    const elapsedSec = (performance.now() - armedSeenAt) / 1000
+    const chars = snapshot.revealBase + snapshot.rules.revealCps * elapsedSec
+    questionEl.textContent = serialQuestionText(chars)
+    if (chars >= snapshot.questionText.length) stopRevealAnim()
+  }
+
+  function renderQuestionText() {
+    if (snapshot.questionText === '') {
+      stopRevealAnim()
+      questionEl.textContent = '（口頭で出題）'
+      return
+    }
+    if (snapshot.rules.reveal !== 'serial') {
+      stopRevealAnim()
+      questionEl.textContent = snapshot.questionText
+      return
+    }
+    if (snapshot.phase === PHASE.ARMED) {
+      const key = `${snapshot.qid}:${snapshot.armedAt}`
+      if (lastArmedKey !== key) {
+        lastArmedKey = key
+        armedSeenAt = performance.now()
+      }
+      renderRevealFrame()
+      if (revealTimer === null) revealTimer = setInterval(renderRevealFrame, 80)
+    } else {
+      stopRevealAnim()
+      questionEl.textContent = serialQuestionText(snapshot.revealBase)
+    }
+  }
+
   // --- 状態描画（host から配信されたスナップショットを描くだけ） ---
+  let lastScore = null
 
   function renderState() {
     if (snapshot === null) return
     phaseEl.textContent = PHASE_LABEL[snapshot.phase]
     phaseEl.className = `phase-banner phase-${snapshot.phase}`
-    questionEl.textContent = snapshot.questionText !== '' ? snapshot.questionText : '（口頭で出題）'
+    // 新しい問題が来たら出現アニメーションを付ける
+    if (questionEl.dataset.qid !== String(snapshot.qid)) {
+      questionEl.dataset.qid = String(snapshot.qid)
+      questionEl.classList.remove('appear')
+      void questionEl.offsetWidth // リフローでアニメーションを再始動させる
+      questionEl.classList.add('appear')
+    }
+    renderQuestionText()
 
     const excluded = snapshot.excluded.includes(playerId)
     stateClasses = []
@@ -346,11 +408,17 @@ function startGame(app, roomCode, nick) {
     }
     applyBuzzerClasses()
 
-    // 自分の得点の要約（得点順の順位）
+    // 自分の得点の要約（得点順の順位）。得点が変わったらポップさせる
     const me = snapshot.players.find((p) => p.playerId === playerId)
     if (me !== undefined) {
       const scoreRank = 1 + snapshot.players.filter((p) => p.score > me.score).length
       meSummary.textContent = `${me.score}点 · ${scoreRank}位/${snapshot.players.length}人`
+      if (lastScore !== null && me.score !== lastScore) {
+        meSummary.classList.remove('pop')
+        void meSummary.offsetWidth
+        meSummary.classList.add('pop')
+      }
+      lastScore = me.score
     } else {
       meSummary.textContent = '—'
     }

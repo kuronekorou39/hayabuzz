@@ -142,19 +142,41 @@ export function mountHost(app) {
     shareOverlay.classList.remove('hidden')
   } })
 
-  // --- ルール設定オーバーレイ（押下音・ハンデ） ---
+  // --- ルール設定オーバーレイ（問題の表示・押下音・復帰・ハンデ） ---
+  const revealSelect = el('select', { class: 'input' }, [
+    el('option', { value: 'all', text: '一括で表示' }),
+    el('option', { value: 'serial', text: '順次表示（読み上げ）' }),
+  ])
+  revealSelect.addEventListener('change', () => game.setReveal(revealSelect.value))
+
+  const revealSpeedSelect = el('select', { class: 'input' }, [
+    el('option', { value: '4', text: 'ゆっくり' }),
+    el('option', { value: '7', text: 'ふつう' }),
+    el('option', { value: '12', text: 'はやい' }),
+  ])
+  revealSpeedSelect.addEventListener('change', () => game.setRevealCps(Number(revealSpeedSelect.value)))
+
   const pressSoundSelect = el('select', { class: 'input' }, [
     el('option', { value: 'winner', text: '回答権を得た人だけ鳴る' }),
     el('option', { value: 'all', text: '押した全員に鳴る' }),
   ])
   pressSoundSelect.addEventListener('change', () => game.setPressSound(pressSoundSelect.value))
 
+  const nickResumeCheck = el('input', { type: 'checkbox' })
+  nickResumeCheck.addEventListener('change', () => game.setNickResume(nickResumeCheck.checked))
+
   const handicapRows = el('div', { class: 'score-rows' })
   const handicapPlaceholder = el('p', { class: 'placeholder', text: 'まだ参加者がいません' })
   const rulesOverlay = el('div', { class: 'overlay rules-overlay hidden' }, [
     el('div', { class: 'card rules-card' }, [
       el('h2', { text: 'ルール設定' }),
+      el('label', { class: 'settings-row' }, [el('span', { text: '問題の表示' }), revealSelect]),
+      el('label', { class: 'settings-row' }, [el('span', { text: '読み上げ速度' }), revealSpeedSelect]),
       el('label', { class: 'settings-row' }, [el('span', { text: '押下音' }), pressSoundSelect]),
+      el('label', { class: 'settings-row' }, [
+        el('span', { text: '同名での復帰（得点引き継ぎ）' }),
+        nickResumeCheck,
+      ]),
       el('h2', { text: 'ハンデ（押下時刻に加算するms）' }),
       handicapPlaceholder,
       handicapRows,
@@ -163,7 +185,10 @@ export function mountHost(app) {
   ])
 
   function openRules() {
+    revealSelect.value = game.rules.reveal
+    revealSpeedSelect.value = String(game.rules.revealCps)
     pressSoundSelect.value = game.rules.pressSound
+    nickResumeCheck.checked = game.rules.nickResume
     const players = [...game.players.values()]
     handicapPlaceholder.style.display = players.length === 0 ? '' : 'none'
     handicapRows.replaceChildren(
@@ -230,6 +255,31 @@ export function mountHost(app) {
   // --- 描画（game の状態を反映するだけ。状態遷移は HostGame が持つ） ---
 
   let prevPhase = game.phase
+  let revealTimer = null
+
+  // 問題文の表示（順次表示ルールでは読み上げ位置までを描画する）
+  function renderQuestionText() {
+    if (game.qid === 0) {
+      currentQuestionEl.textContent = 'まだ問題がありません'
+      return
+    }
+    if (game.questionText === '') {
+      currentQuestionEl.textContent = `第${game.qid}問（口頭で出題）`
+      return
+    }
+    const prefix = `第${game.qid}問: `
+    if (game.rules.reveal === 'serial') {
+      let chars = game.revealBase
+      if (game.phase === PHASE.ARMED && game.armedAt !== null) {
+        chars += (game.rules.revealCps * (performance.now() - game.armedAt)) / 1000
+      }
+      const count = Math.min(game.questionText.length, Math.floor(chars))
+      currentQuestionEl.textContent =
+        count <= 0 ? `${prefix}（早押し開始で読み上げ）` : prefix + game.questionText.slice(0, count)
+    } else {
+      currentQuestionEl.textContent = prefix + game.questionText
+    }
+  }
 
   function render() {
     if (game.phase === PHASE.LOCKED && prevPhase !== PHASE.LOCKED) playLock()
@@ -240,11 +290,14 @@ export function mountHost(app) {
 
     phaseEl.textContent = PHASE_LABEL[game.phase]
     phaseEl.className = `phase-chip phase-${game.phase}`
-    if (game.qid === 0) {
-      currentQuestionEl.textContent = 'まだ問題がありません'
-    } else {
-      currentQuestionEl.textContent =
-        game.questionText !== '' ? `第${game.qid}問: ${game.questionText}` : `第${game.qid}問（口頭で出題）`
+    renderQuestionText()
+    // 読み上げ中はアニメーションのために定期再描画する
+    const revealing = game.rules.reveal === 'serial' && game.phase === PHASE.ARMED
+    if (revealing && revealTimer === null) {
+      revealTimer = setInterval(renderQuestionText, 100)
+    } else if (!revealing && revealTimer !== null) {
+      clearInterval(revealTimer)
+      revealTimer = null
     }
 
     // 受付中・判定中の「問題を表示」は進行中の問題を破棄してしまうため無効化する

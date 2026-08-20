@@ -107,7 +107,7 @@ export function mountHost(app) {
   const stopBtn = el('button', { class: 'btn', text: '受付停止', onclick: () => game.stop() })
 
   const phaseEl = el('span', { class: 'phase-chip', text: PHASE_LABEL[PHASE.WAITING] })
-  const currentQuestionEl = el('div', { class: 'question-text', text: 'まだ問題がありません' })
+  const currentQuestionEl = el('div', { class: 'question-text question-clamp', text: 'まだ問題がありません' })
   const orderList = el('ol', { class: 'order-list' })
   const orderPlaceholder = el('p', { class: 'placeholder', text: 'まだ誰も押していません' })
   const resultLine = el('p', { class: 'result-line hidden', text: '' })

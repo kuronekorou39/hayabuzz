@@ -20,7 +20,7 @@ export async function joinPlayer(browser, code, nick, contextOptions = {}) {
   await page.goto(`./#/join/${code}`)
   await page.locator('input[placeholder="ニックネーム"]').fill(nick)
   await page.getByRole('button', { name: '参加する' }).click()
-  await expect(page.locator('.overlay')).toBeHidden({ timeout: 60_000 })
+  await expect(page.locator('.conn-overlay')).toBeHidden({ timeout: 60_000 })
   return { context, page, nick }
 }
 

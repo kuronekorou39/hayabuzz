@@ -285,12 +285,20 @@ textarea.input {
   min-height: 1.4em;
 }
 
+/* 長い問題文はページでなくカードの中でスクロールさせ、レイアウトを崩さない */
+.question-clamp {
+  max-height: 5.2em;
+  overflow-y: auto;
+}
+
 .order-list {
   margin: 0;
   padding: 0 0 0 1.6em;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  max-height: 26vh;
+  overflow-y: auto;
 }
 
 .order-row {
@@ -340,6 +348,8 @@ textarea.input {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 32vh;
+  overflow-y: auto;
 }
 
 .score-row {
@@ -369,9 +379,11 @@ textarea.input {
 
 /* ---- 回答者 ---- */
 
+/* 回答者画面はページスクロールなしで完結させる（一覧類はオーバーレイで見る） */
 .player-screen {
-  min-height: 100vh; /* dvh 非対応の旧ブラウザ向けフォールバック */
-  min-height: 100dvh;
+  height: 100vh; /* dvh 非対応の旧ブラウザ向けフォールバック */
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .phase-banner {
@@ -404,7 +416,7 @@ textarea.input {
 
 .buzzer {
   flex: 1;
-  min-height: 44vh;
+  min-height: 0; /* 画面が低くても他要素を押し出さず自身が縮む */
   width: 100%;
   border: none;
   background: transparent;
@@ -589,52 +601,68 @@ textarea.input {
   accent-color: var(--primary);
 }
 
-.me-row {
-  display: flex;
-  gap: 8px;
-}
-
-.stat {
-  flex: 1;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.result-banner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  text-align: center;
-  border-radius: 10px;
-  padding: 8px 10px;
-  font-weight: 700;
-}
-
 .mascot-hero {
   width: 120px;
   align-self: center;
   border-radius: 18px;
 }
 
-.result-banner.ok {
-  background: rgba(53, 199, 123, 0.15);
+/* 下部バー（自分の得点の要約 + 得点表ボタン） */
+.bottom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.me-summary {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 一時表示のトースト（結果・押下順位などの通知） */
+.toasts {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 30;
+  pointer-events: none;
+  width: max-content;
+  max-width: 92vw;
+}
+
+.toast {
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-weight: 700;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  transition: opacity 0.6s;
+  overflow-wrap: anywhere;
+}
+
+.toast.ok {
+  border-color: var(--ok);
   color: var(--ok);
-  border: 1px solid var(--ok);
 }
 
-.result-banner.ng {
-  background: rgba(255, 107, 107, 0.12);
+.toast.ng {
+  border-color: var(--ng);
   color: var(--ng);
-  border: 1px solid var(--ng);
 }
 
-.result-banner.hidden {
-  display: none;
+.toast.fade {
+  opacity: 0;
 }
 
 /* 出題者側の判定結果ライン */
@@ -730,7 +758,8 @@ textarea.input {
   text-align: center;
 }
 
-.overlay .rules-card {
+.overlay .rules-card,
+.overlay .board-card {
   width: min(92vw, 360px);
   max-height: 70vh;
   overflow-y: auto;
@@ -794,7 +823,7 @@ textarea.input {
   }
 
   .btn-row > * + *,
-  .me-row > * + *,
+  .bottom-bar > * + *,
   .url-row > * + *,
   .score-row > * + *,
   .board-row > * + *,

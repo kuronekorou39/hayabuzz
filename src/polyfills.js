@@ -28,6 +28,18 @@ if (!Object.hasOwn) {
   Object.hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key)
 }
 
+// queueMicrotask / Object.fromEntries: Safari 12.1+ のため補う（iOS 12.0/12.1 向け）
+if (!window.queueMicrotask) {
+  window.queueMicrotask = (fn) => Promise.resolve().then(fn)
+}
+if (!Object.fromEntries) {
+  Object.fromEntries = (entries) => {
+    const obj = {}
+    for (const [key, value] of entries) obj[key] = value
+    return obj
+  }
+}
+
 // Array.flat / flatMap: Safari 12.1+ のため補う（iOS 12.0/12.1 向け）
 if (!Array.prototype.flat) {
   Array.prototype.flat = function (depth) {

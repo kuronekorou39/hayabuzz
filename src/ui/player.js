@@ -110,11 +110,21 @@ function startGame(app, roomCode, nick) {
   let pressedKey = null // 押下済みの受付回を識別する（再開放で armedAt が変わると再度押せる）
   let joinTimer = null
 
+  // --- 通知トースト（結果や順位は常設せず、一時表示で伝える） ---
+  const toastBox = el('div', { class: 'toasts' })
+
+  function showToast(text, kind = '') {
+    const toast = el('div', { class: `toast ${kind}`, text })
+    toastBox.append(toast)
+    setTimeout(() => toast.classList.add('fade'), 3200)
+    setTimeout(() => toast.remove(), 3900)
+  }
+
   // --- DOM ---
   const statusDot = el('span', { class: 'dot wait' })
   const statusText = el('span', { class: 'status-text', text: '接続中' })
   const phaseEl = el('div', { class: 'phase-banner', text: '接続中…' })
-  const questionEl = el('div', { class: 'question-text card', text: '' })
+  const questionEl = el('div', { class: 'question-text card question-clamp', text: '' })
 
   // 早押しボタン: 台（base）とボタン（cap）の2層 + 状態ラベル
   const buzzerBase = el('img', { class: 'buzzer-base', alt: '', draggable: 'false' })
@@ -123,13 +133,17 @@ function startGame(app, roomCode, nick) {
   const buzzerRig = el('div', { class: 'buzzer-rig' }, [buzzerBase, buzzerCap, buzzerLabel])
   const buzzer = el('button', { class: 'buzzer' }, [buzzerRig])
 
-  const rankEl = el('div', { class: 'stat', text: '順位 —' })
-  const scoreEl = el('div', { class: 'stat', text: '得点 0' })
-  const resultEl = el('div', { class: 'result-banner hidden', text: '' })
-
-  // 全員の得点表（自分をハイライト）
+  // 下部バー: 自分の得点の要約 + 得点表を開くボタン
+  const meSummary = el('span', { class: 'me-summary', text: '—' })
   const boardRows = el('div', { class: 'board-rows' })
-  const boardCard = el('div', { class: 'card' }, [el('h2', { text: '得点表' }), boardRows])
+  const boardOverlay = el('div', { class: 'overlay board-overlay hidden' }, [
+    el('div', { class: 'card board-card' }, [el('h2', { text: '得点表' }), boardRows]),
+    el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => boardOverlay.classList.add('hidden') }),
+  ])
+  const bottomBar = el('div', { class: 'bottom-bar' }, [
+    meSummary,
+    el('button', { class: 'btn btn-small', text: '得点表', onclick: () => boardOverlay.classList.remove('hidden') }),
+  ])
 
   // --- 設定（ボタンの見た目 / 効果音） ---
   let styleClass = 'style-simple'
@@ -185,11 +199,12 @@ function startGame(app, roomCode, nick) {
     onclick: () => settingsCard.classList.toggle('hidden'),
   })
 
+  // --- 接続オーバーレイ（接続中/エラー/部屋終了の全画面表示） ---
   const overlayTitle = el('h2', { text: '' })
   const overlayMessage = el('p', { text: '' })
   const overlayButtons = el('div', { class: 'btn-row' })
   const spinner = el('div', { class: 'spinner' })
-  const overlay = el('div', { class: 'overlay' }, [spinner, overlayTitle, overlayMessage, overlayButtons])
+  const overlay = el('div', { class: 'overlay conn-overlay' }, [spinner, overlayTitle, overlayMessage, overlayButtons])
 
   function showOverlay(title, message, buttons, { withSpinner = false } = {}) {
     overlayTitle.textContent = title
@@ -216,11 +231,11 @@ function startGame(app, roomCode, nick) {
       phaseEl,
       questionEl,
       buzzer,
-      el('div', { class: 'me-row' }, [rankEl, scoreEl]),
-      resultEl,
-      boardCard,
+      bottomBar,
     ]),
     overlay,
+    boardOverlay,
+    toastBox,
   )
   applyBuzzerStyle(prefs.buttonStyle)
 
@@ -232,6 +247,19 @@ function startGame(app, roomCode, nick) {
     statusDot.className = `dot ${kind}`
     statusText.textContent = label
   }
+
+  // 画面スリープでの切断を防ぐ（対応端末のみ・失敗は無視）
+  async function keepAwake() {
+    try {
+      await navigator.wakeLock?.request('screen')
+    } catch {
+      // 非対応・省電力モード等では取得できないが、ゲームは続行できる
+    }
+  }
+  keepAwake()
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') keepAwake()
+  })
 
   // --- 早押し ---
 
@@ -284,17 +312,6 @@ function startGame(app, roomCode, nick) {
     phaseEl.className = `phase-banner phase-${snapshot.phase}`
     questionEl.textContent = snapshot.questionText !== '' ? snapshot.questionText : '（口頭で出題）'
 
-    const me = snapshot.players.find((p) => p.playerId === playerId)
-    scoreEl.textContent = `得点 ${me !== undefined ? me.score : 0}`
-
-    const rankIndex = snapshot.order.findIndex((o) => o.playerId === playerId)
-    if (rankIndex >= 0) {
-      const deltaMs = snapshot.order[rankIndex].deltaMs
-      rankEl.textContent = rankIndex === 0 ? '順位 1位' : `順位 ${rankIndex + 1}位 (+${deltaMs.toFixed(1)}ms)`
-    } else {
-      rankEl.textContent = '順位 —'
-    }
-
     const excluded = snapshot.excluded.includes(playerId)
     stateClasses = []
     if (excluded) {
@@ -329,23 +346,16 @@ function startGame(app, roomCode, nick) {
     }
     applyBuzzerClasses()
 
-    if (snapshot.result !== null) {
-      if (snapshot.result.correct) {
-        const winner = snapshot.players.find((p) => p.playerId === snapshot.result.playerId)
-        resultEl.textContent =
-          snapshot.result.playerId === playerId
-            ? '正解！ +1点'
-            : `${winner !== undefined ? winner.nick : '？'} さんが正解`
-        resultEl.className = 'result-banner ok'
-      } else {
-        resultEl.textContent = '正解者なし'
-        resultEl.className = 'result-banner ng'
-      }
+    // 自分の得点の要約（得点順の順位）
+    const me = snapshot.players.find((p) => p.playerId === playerId)
+    if (me !== undefined) {
+      const scoreRank = 1 + snapshot.players.filter((p) => p.score > me.score).length
+      meSummary.textContent = `${me.score}点 · ${scoreRank}位/${snapshot.players.length}人`
     } else {
-      resultEl.className = 'result-banner hidden'
+      meSummary.textContent = '—'
     }
 
-    // 得点表（得点の高い順、自分をハイライト。ハンデは全員に見える）
+    // 得点表（オーバーレイの中身。開いたときに最新になるよう常に更新しておく）
     const board = [...snapshot.players].sort((a, b) => b.score - a.score)
     boardRows.replaceChildren(
       ...board.map((p) =>
@@ -361,8 +371,15 @@ function startGame(app, roomCode, nick) {
     )
   }
 
-  // 前回スナップショットとの差分から効果音を鳴らす
+  // 前回スナップショットとの差分から効果音・トーストを出す
   function notifyTransitions(prev, next) {
+    // 自分の押下順位が確定した
+    const wasRanked = prev.order.some((o) => o.playerId === playerId)
+    const rankIndex = next.order.findIndex((o) => o.playerId === playerId)
+    if (!wasRanked && rankIndex >= 0) {
+      const deltaMs = next.order[rankIndex].deltaMs
+      showToast(rankIndex === 0 ? '1位！' : `${rankIndex + 1}位 (+${deltaMs.toFixed(1)}ms)`, rankIndex === 0 ? 'ok' : '')
+    }
     // 回答権が自分に回ってきた
     if (next.phase === PHASE.LOCKED && next.activePlayerId === playerId && prev.activePlayerId !== playerId) {
       playYourTurn()
@@ -370,11 +387,23 @@ function startGame(app, roomCode, nick) {
     // 自分が誤答と判定された（除外に追加された）
     if (next.excluded.includes(playerId) && !prev.excluded.includes(playerId)) {
       playWrong()
+      showToast('不正解…', 'ng')
     }
     // 判定結果が出た
     if (next.result !== null && prev.result === null) {
-      if (next.result.correct) playCorrect()
-      else playWrong()
+      if (next.result.correct) {
+        playCorrect()
+        const winner = next.players.find((p) => p.playerId === next.result.playerId)
+        showToast(
+          next.result.playerId === playerId
+            ? '正解！ +1点'
+            : `${winner !== undefined ? winner.nick : '？'} さんが正解`,
+          'ok',
+        )
+      } else {
+        playWrong()
+        showToast('正解者なし', 'ng')
+      }
     }
   }
 
@@ -386,6 +415,7 @@ function startGame(app, roomCode, nick) {
     playerId = msg.playerId
     hideOverlay()
     setStatus('on', msg.resumed ? '再接続しました' : '接続済み')
+    if (msg.resumed) showToast('得点を引き継ぎました', 'ok')
   }
 
   function showRoomClosed() {

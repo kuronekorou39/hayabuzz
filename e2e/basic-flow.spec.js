@@ -26,19 +26,45 @@ test('基本フロー: 参加→出題→早押し→正解→再接続→部屋
   await expect(p1.page.locator('.buzzer-label')).toHaveText('回答してください！')
 
   await host.page.getByRole('button', { name: '正解', exact: true }).click()
-  await expect(p1.page.locator('.result-banner.ok')).toContainText('正解！ +1点')
-  await expect(p1.page.locator('.stat', { hasText: '得点' })).toHaveText('得点 1')
+  await expect(p1.page.locator('.toast.ok', { hasText: '正解！ +1点' })).toBeVisible()
+  await expect(p1.page.locator('.me-summary')).toContainText('1点')
 
   // 一時切断→再接続（リロード）で同一セッションIDにより得点を引き継ぐ
   await p1.page.reload()
   await p1.page.locator('input[placeholder="ニックネーム"]').fill('たろう')
   await p1.page.getByRole('button', { name: '参加する' }).click()
-  await expect(p1.page.locator('.overlay')).toBeHidden({ timeout: 60_000 })
-  await expect(p1.page.locator('.stat', { hasText: '得点' })).toHaveText('得点 1')
+  await expect(p1.page.locator('.conn-overlay')).toBeHidden({ timeout: 60_000 })
+  await expect(p1.page.locator('.me-summary')).toContainText('1点')
 
   // host 切断で player に部屋の終了を明示する
   await host.context.close()
-  await expect(p1.page.locator('.overlay')).toContainText('部屋が終了しました', { timeout: 30_000 })
+  await expect(p1.page.locator('.conn-overlay')).toContainText('部屋が終了しました', { timeout: 30_000 })
 
   await p1.context.close()
+})
+
+test('タブを閉じて別セッションになっても、同名なら得点を引き継いで再入場できる', async ({ browser }) => {
+  const host = await createRoom(browser)
+
+  const p1 = await joinPlayer(browser, host.code, 'たろう')
+  await askAndArm(host, '1問目')
+  await expect(p1.page.locator('.buzzer')).toHaveClass(/\barmed\b/)
+  await pressBuzzer(p1.page)
+  await expect(host.page.locator('.badge.active')).toBeVisible()
+  await host.page.getByRole('button', { name: '正解', exact: true }).click()
+  await expect(p1.page.locator('.me-summary')).toContainText('1点')
+
+  // タブを閉じる（sessionStorage が消える＝新しい sessionId になる）
+  await p1.context.close()
+  await expect(host.page.locator('.score-row .dot.off')).toBeVisible({ timeout: 20_000 })
+
+  // 新しいコンテキスト（別端末相当）から同じ名前で入り直す
+  const p2 = await joinPlayer(browser, host.code, 'たろう')
+  await expect(p2.page.locator('.me-summary')).toContainText('1点')
+  // 別人として増えず、同一プレイヤーとして扱われる
+  await expect(host.page.locator('.score-row')).toHaveCount(1)
+  await expect(host.page.locator('.score-row .dot.on')).toBeVisible()
+
+  await p2.context.close()
+  await host.context.close()
 })

@@ -11,6 +11,19 @@
   </head>
   <body>
     <div id="app"></div>
+    <script>
+      // 旧端末での起動失敗を画面に可視化する（この部分は ES5 のみで記述すること）
+      window.addEventListener('error', function (ev) {
+        var app = document.getElementById('app')
+        if (!app || app.firstChild) return // 描画成功後のエラーは対象外
+        var box = document.createElement('div')
+        box.style.cssText =
+          'padding:16px;color:#ff8a80;background:#10141a;font-family:sans-serif;font-size:12px;word-break:break-all;line-height:1.6'
+        box.textContent =
+          '起動エラー: ' + (ev.message || '不明') + ' @ ' + (ev.filename || '?') + ':' + (ev.lineno || '?')
+        document.body.appendChild(box)
+      })
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -83,18 +83,18 @@ test('複数端末: 3人参加（1人はスマホ）で押下順・次点・再�
   await pressBuzzer(third.page)
   await expect(third.page.locator('.buzzer-label')).toHaveText('回答してください！')
 
-  // --- 正解 → 全端末に結果と得点が配信される ---
+  // --- 正解 → 全端末に結果（トースト）と得点が配信される ---
   await host.page.getByRole('button', { name: '正解', exact: true }).click()
-  await expect(third.page.locator('.result-banner.ok')).toContainText('正解！ +1点')
-  await expect(third.page.locator('.stat', { hasText: '得点' })).toHaveText('得点 1')
-  await expect(first.page.locator('.result-banner.ok')).toContainText(`${third.nick} さんが正解`)
-  await expect(second.page.locator('.result-banner.ok')).toContainText(`${third.nick} さんが正解`)
+  await expect(third.page.locator('.toast.ok', { hasText: '正解！ +1点' })).toBeVisible()
+  await expect(first.page.locator('.toast.ok', { hasText: `${third.nick} さんが正解` })).toBeVisible()
+  await expect(second.page.locator('.toast.ok', { hasText: `${third.nick} さんが正解` })).toBeVisible()
+  await expect(third.page.locator('.me-summary')).toContainText('1点')
 
   // --- 手動加減点が該当 player に配信される ---
   await host.page.locator('.score-row', { hasText: first.nick }).getByRole('button', { name: '＋' }).click()
-  await expect(first.page.locator('.stat', { hasText: '得点' })).toHaveText('得点 1')
+  await expect(first.page.locator('.me-summary')).toContainText('1点')
   await host.page.locator('.score-row', { hasText: first.nick }).getByRole('button', { name: '−' }).click()
-  await expect(first.page.locator('.stat', { hasText: '得点' })).toHaveText('得点 0')
+  await expect(first.page.locator('.me-summary')).toContainText('0点')
 
   // --- ルール: ハンデを付けた player は同時押しでも順位が下がる ---
   await host.page.getByRole('button', { name: 'ルール' }).click()
@@ -104,7 +104,9 @@ test('複数端末: 3人参加（1人はスマホ）で押下順・次点・再�
   await host.page.locator('.rules-overlay').getByRole('button', { name: '閉じる' }).click()
   // ハンデは全端末の得点表に表示される
   await expect(host.page.locator('.score-row', { hasText: 'たろう' })).toContainText('ハンデ+1000ms')
+  await p2.page.getByRole('button', { name: '得点表' }).click()
   await expect(p2.page.locator('.board-row', { hasText: 'たろう' })).toContainText('ハンデ+1000ms')
+  await p2.page.locator('.board-overlay').getByRole('button', { name: '閉じる' }).click()
 
   await raceBuzz(host, [p1, p2, p3], 'ハンデ確認')
   const nicksAfter = await host.page.locator('.order-nick').allTextContents()
@@ -127,7 +129,7 @@ test('次点がいない不正解は「正解者なし」で終わる', async ({
 
   // 押したのが1人だけなので次点がなく、正解者なしの結果になる
   await host.page.getByRole('button', { name: '不正解→次点へ' }).click()
-  await expect(p1.page.locator('.result-banner.ng')).toContainText('正解者なし')
+  await expect(p1.page.locator('.toast.ng', { hasText: '正解者なし' })).toBeVisible()
 
   await p1.context.close()
   await host.context.close()

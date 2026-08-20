@@ -52,8 +52,19 @@ export class HostGame {
     const stale = this.#byPeer(peerId)
     if (stale && stale.sessionId !== msg.sessionId) this.#disconnect(stale)
 
+    const requestedNick = msg.nick.trim().slice(0, CONFIG.nickMaxLen)
     let player = this.players.get(msg.sessionId)
-    const resumed = player !== undefined
+    let resumed = player !== undefined
+    if (!player) {
+      // タブを閉じる等で sessionId が変わっても、切断中の同名プレイヤーがいれば
+      // 同一人物とみなして得点ごと引き継ぐ（接続中のプレイヤーの乗っ取りは不可）
+      const orphan = [...this.players.values()].find((p) => !p.connected && p.nick === requestedNick)
+      if (orphan !== undefined) {
+        this.#migratePlayerId(orphan.sessionId, msg.sessionId)
+        player = orphan
+        resumed = true
+      }
+    }
     if (!player) {
       if (this.players.size >= CONFIG.maxPlayers) {
         this.send({ type: MSG.REJECTED, reason: '満員のため参加できません' }, peerId)
@@ -72,8 +83,7 @@ export class HostGame {
       }
       this.players.set(msg.sessionId, player)
     }
-    const nick = msg.nick.trim().slice(0, CONFIG.nickMaxLen)
-    player.nick = nick !== '' ? nick : 'ななし'
+    player.nick = requestedNick !== '' ? requestedNick : 'ななし'
     player.peerId = peerId
     player.connected = true
     this.send({ type: MSG.WELCOME, playerId: msg.sessionId, resumed }, peerId)
@@ -259,6 +269,23 @@ export class HostGame {
   }
 
   // ---- 内部 ----
+
+  // プレイヤーIDを新しい sessionId に付け替える（進行中の状態の参照もすべて更新）
+  #migratePlayerId(oldId, newId) {
+    const player = this.players.get(oldId)
+    this.players.delete(oldId)
+    player.sessionId = newId
+    this.players.set(newId, player)
+    for (const press of this.presses) {
+      if (press.playerId === oldId) press.playerId = newId
+    }
+    this.order = this.order.map((o) => (o.playerId === oldId ? { ...o, playerId: newId } : o))
+    if (this.excluded.delete(oldId)) this.excluded.add(newId)
+    if (this.activePlayerId === oldId) this.activePlayerId = newId
+    if (this.result !== null && this.result.playerId === oldId) {
+      this.result = { ...this.result, playerId: newId }
+    }
+  }
 
   #byPeer(peerId) {
     for (const player of this.players.values()) {

@@ -1,9 +1,26 @@
 // 運用で調整しうる値をここに集約する
 export const CONFIG = {
   // 通信
-  appId: 'hayabuzz-v1', // Trystero のアプリ識別子（部屋名の名前空間）
+  appId: 'hayabuzz-v1', // 部屋トピックの名前空間（info_hash の材料）
   joinTimeoutMs: 15000, // 参加確立（welcome受信）までの待ち時間
   maxPlayers: 24,
+
+  // シグナリング（WebTorrent トラッカーの WebSocket プロトコルを自前実装で使用）
+  signaling: {
+    trackerUrls: [
+      'wss://tracker.webtorrent.dev',
+      'wss://tracker.openwebtorrent.com',
+      'wss://open.ftorrent.com',
+    ],
+    announceIntervalMs: 10000, // 定期 announce（新規参加者が offer を受け取れる周期）
+    reconnectBaseMs: 2000, // トラッカー切断時の再接続（指数バックオフの初期値）
+    reconnectMaxMs: 30000,
+    numwant: 8, // トラッカーに希望する offer 配布先ピア数
+    offerPool: 3, // 待ち受け offer の常備数
+    offerTtlMs: 120000, // 古い offer を作り直すまでの時間（ICE 候補の失効対策）
+    iceGatherTimeoutMs: 1600, // ICE 候補収集の打ち切り時間
+    dedupeWindowMs: 4000, // 複数トラッカー経由の重複シグナル排除窓
+  },
 
   // WebRTC の経路確立（ICE）設定。
   // STUN を複数指定して経路発見を安定させ、直結できない回線（対称NAT・

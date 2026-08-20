@@ -1,9 +1,14 @@
 # Hayabuzz — サーバレスP2P早押しクイズ
 
 GitHub Pages（静的配信のみ）でホストできる早押しクイズアプリです。バックエンドは持たず、
-通信は WebRTC DataChannel による P2P で行います。シグナリングには
-[Trystero](https://github.com/dmotz/trystero) の BitTorrent トラッカー戦略
-（`@trystero-p2p/torrent`・アカウント不要）を使います。
+通信は WebRTC DataChannel による P2P で行います。P2P 層（WebRTC ハンドシェイクと
+シグナリング）は外部ライブラリに依存せず自前実装です。
+
+シグナリングには WebTorrent トラッカーの WebSocket プロトコルを使います:
+公開トラッカーへ部屋名のハッシュ（info_hash）で announce し、メッセージに相乗りさせた
+WebRTC の offer/answer（SDP テキスト）を同じ部屋の相手と交換します。トラッカーを通るのは
+この接続情報だけで、接続確立後のゲームデータは端末間の DataChannel を直接流れます
+（トラッカーが必要なのは参加の瞬間だけ。ゲーム中に落ちても進行に影響しません）。
 
 ## 遊び方
 
@@ -34,10 +39,11 @@ GitHub Pages（静的配信のみ）でホストできる早押しクイズア�
 ```
 src/
 ├─ net/
-│  ├─ transport.js   # 通信層インターフェース（join/leave/send/onMessage/onPeerJoin/onPeerLeave）
-│  ├─ trystero.js    # Trystero 実装
-│  ├─ protocol.js    # メッセージ型定義とスキーマ検証
-│  └─ timesync.js    # RTT / クロックオフセット推定
+│  ├─ transport.js         # 通信層インターフェース（join/leave/send/onMessage/onPeerJoin/onPeerLeave）
+│  ├─ webrtc-transport.js  # RTCPeerConnection / DataChannel の自前実装（スター型を強制）
+│  ├─ tracker-signal.js    # WebTorrent トラッカープロトコルの自前実装（シグナリング）
+│  ├─ protocol.js          # メッセージ型定義とスキーマ検証
+│  └─ timesync.js          # RTT / クロックオフセット推定（min-RTTフィルタ + 中央値）
 ├─ game/
 │  ├─ phases.js      # フェーズ定義
 │  ├─ buzz.js        # 押下順判定（純関数）
@@ -123,7 +129,20 @@ Settings → Pages で Branch: `gh-pages` / `/ (root)` を選択します。
 3. それでも繋がらない場合はモバイル回線⇔Wi-Fi を切り替えて再試行
 4. 常に安定させたい場合は自前 TURN サーバを `src/config.js` の `iceServers` に追加
 
-## 通信層の差し替え（Trystero → PeerJS 等）
+## 接続の設計
+
+- **スター型を WebRTC レベルでも強制**: peer_id の先頭に役割（host/player）を埋め込み、
+  回答者はホストの offer にしか answer しない。回答者どうしは接続せず、互いの IP も見えない
+- **双方向 offer で参加を即時化**: 参加者側も offer を announce するため、
+  ホストの announce 周期を待たずに接続が始まる（典型 2〜5 秒で参加完了）
+- 複数トラッカーへ並行 announce（1系統死んでも参加可能）+ 切断時は指数バックオフで再接続
+- ICE は vanilla 方式（候補の収集完了を待って SDP に同梱。上限 1.6 秒で打ち切り）
+- 同一ペアで両方向に接続が成立した場合は「offer した側の peer_id が小さい方を残す」
+  決定的ルールで重複を解決
+- クロックオフセット推定は RTT 下位半分のサンプルに絞って中央値を取り（min-RTTフィルタ）、
+  混雑回線の非対称誤差を抑える
+
+## 通信層の差し替え
 
 通信は `src/net/transport.js` のインターフェースに抽象化してあります:
 
@@ -139,10 +158,9 @@ Settings → Pages で Branch: `gh-pages` / `/ (root)` を選択します。
 }
 ```
 
-Trystero が不安定な場合は、この契約を満たす実装（例: `src/net/peerjs.js`）を追加し、
-`transport.js` の `createTransport()` の分岐に登録してください。
-PeerJS の場合は「部屋 = host の Peer ID」として、player 側は roomId から host へ
-接続する形にすると同じスター型トポロジになります。
+別方式（自前シグナリングサーバや PeerJS 等）に切り替える場合は、この契約を満たす実装を
+追加して `transport.js` の `createTransport()` を差し替えてください。
+ゲームロジック側は通信方式を知りません。
 
 ## セキュリティ / プライバシー
 

@@ -1,4 +1,4 @@
-import { createTrysteroTransport } from './trystero.js'
+import { createWebrtcTransport } from './webrtc-transport.js'
 
 // 通信層の共通インターフェース。実装は以下の契約を満たすこと:
 //
@@ -12,13 +12,9 @@ import { createTrysteroTransport } from './trystero.js'
 //     onPeerLeave(cb(peerId)): void        // ピア切断
 //   }
 //
-// Trystero が不安定な場合は、この契約を満たす PeerJS 実装
-// （createPeerjsTransport 等）を追加し、下の分岐に登録して差し替える。
-export function createTransport(kind = 'trystero') {
-  switch (kind) {
-    case 'trystero':
-      return createTrysteroTransport()
-    default:
-      throw new Error(`unknown transport: ${kind}`)
-  }
+// 現在の実装は自前の WebRTC + WebTorrent トラッカーシグナリング
+// （webrtc-transport.js / tracker-signal.js）。別方式に差し替える場合は
+// この契約を満たす実装を追加してここで切り替える。
+export function createTransport({ role }) {
+  return createWebrtcTransport({ role })
 }

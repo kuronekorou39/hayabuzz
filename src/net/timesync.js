@@ -17,10 +17,14 @@ export function median(values) {
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
-// 複数サンプルからオフセット推定値を得る（外れ値に頑健な中央値を採用）
+// 複数サンプルからオフセット推定値を得る。
+// RTT が小さいサンプルほど往復の非対称誤差が小さいため、
+// RTT 下位半分に絞ってから外れ値に頑健な中央値を取る（min-RTTフィルタ）
 export function estimateOffset(samples) {
   if (samples.length === 0) return null
-  return median(samples.map((s) => s.offset))
+  const sorted = [...samples].sort((a, b) => a.rtt - b.rtt)
+  const best = sorted.slice(0, Math.max(1, Math.ceil(sorted.length / 2)))
+  return median(best.map((s) => s.offset))
 }
 
 // ---- host が player ごとに保持する同期状態 ----

@@ -44,6 +44,17 @@ describe('estimateOffset', () => {
   it('サンプルなしは null', () => {
     expect(estimateOffset([])).toBeNull()
   })
+
+  it('RTTが大きい（誤差の乗りやすい）サンプルを除外して推定する', () => {
+    const samples = [
+      { rtt: 10, offset: 100 },
+      { rtt: 12, offset: 101 },
+      { rtt: 11, offset: 99 },
+      { rtt: 200, offset: 250 }, // 混雑時の非対称なサンプル
+      { rtt: 180, offset: 240 },
+    ]
+    expect(estimateOffset(samples)).toBe(100)
+  })
 })
 
 describe('PeerSync', () => {

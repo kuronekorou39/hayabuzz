@@ -99,7 +99,7 @@ export function mountPlayer(app, { roomCode = '' } = {}) {
 
 function startGame(app, roomCode, nick) {
   const sessionId = getSessionId()
-  const transport = createTransport()
+  const transport = createTransport({ role: 'player' })
   const prefs = loadPrefs()
   setSoundEnabled(prefs.sound)
 

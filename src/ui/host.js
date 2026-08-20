@@ -16,7 +16,7 @@ export function mountHost(app) {
 
   const roomCode = randomCode(CONFIG.roomCodeLen)
   const joinUrl = `${location.origin}${location.pathname}${location.search}#/join/${roomCode}`
-  const transport = createTransport()
+  const transport = createTransport({ role: 'host' })
   const game = new HostGame({
     send: (msg, peerId) => transport.send(msg, peerId),
     onChange: render,

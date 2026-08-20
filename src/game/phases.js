@@ -8,7 +8,7 @@ export const PHASE = {
 }
 
 export const PHASE_LABEL = {
-  [PHASE.WAITING]: '待機中',
+  [PHASE.WAITING]: '出題待ち',
   [PHASE.QUESTION]: '問題表示中',
   [PHASE.ARMED]: '早押し受付中！',
   [PHASE.LOCKED]: '回答中…',

@@ -1,3 +1,4 @@
+import './polyfills.js'
 import './style.css'
 import { mountPlayer } from './ui/player.js'
 import { mountTop } from './ui/top.js'

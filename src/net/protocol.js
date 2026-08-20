@@ -47,11 +47,12 @@ const SCHEMAS = {
     qid: isNum,
     questionText: str0(CONFIG.questionMaxLen),
     armedAt: nullable(isNum), // 早押し受付開始の host 時刻（フライング判定の基準）
-    players: arrayOf(shapeOf({ playerId: id, nick, score: isNum, connected: isBool })),
+    players: arrayOf(shapeOf({ playerId: id, nick, score: isNum, connected: isBool, handicapMs: isNum })),
     order: arrayOf(shapeOf({ playerId: id, deltaMs: isNum })),
     activePlayerId: nullable(id), // 回答権を持つ player
     excluded: arrayOf(id),
     result: nullable(shapeOf({ playerId: nullable(id), correct: isBool })),
+    rules: shapeOf({ pressSound: oneOf(['winner', 'all']) }),
   },
 }
 

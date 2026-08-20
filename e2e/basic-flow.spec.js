@@ -7,6 +7,12 @@ test('基本フロー: 参加→出題→早押し→正解→再接続→部屋
   const p1 = await joinPlayer(browser, host.code, 'たろう')
   await expect(host.page.locator('.score-nick', { hasText: 'たろう' })).toBeVisible()
 
+  // ゲーム進行中でも「共有」からルームコードとQRを表示できる（途中参加者向け）
+  await host.page.getByRole('button', { name: '共有' }).click()
+  await expect(host.page.locator('.share-overlay .room-code')).toHaveText(host.code)
+  await host.page.locator('.share-overlay').getByRole('button', { name: '閉じる' }).click()
+  await expect(host.page.locator('.share-overlay')).toBeHidden()
+
   await askAndArm(host, '日本の首都は？')
   await expect(p1.page.locator('.question-text')).toContainText('日本の首都は？')
   await expect(p1.page.locator('.buzzer')).toHaveClass(/\barmed\b/)

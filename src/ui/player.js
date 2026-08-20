@@ -1,6 +1,3 @@
-import mascotCorrect from '../assets/mascot/correct.webp'
-import mascotFlying from '../assets/mascot/flying.webp'
-import mascotWrong from '../assets/mascot/wrong.webp'
 import { playBuzz, playCorrect, playWrong, playYourTurn, setSoundEnabled, unlockAudio } from '../audio.js'
 import { CONFIG } from '../config.js'
 import { PHASE, PHASE_LABEL } from '../game/phases.js'
@@ -12,6 +9,7 @@ import { randomCode } from '../util/random.js'
 import { BUZZER_STYLES, getBuzzerStyle } from './buzzer-styles.js'
 
 const SESSION_KEY = 'hayabuzz.sessionId'
+const NICK_KEY = 'hayabuzz.nick' // タブのセッション内のみ保持（localStorage には保存しない）
 
 // 一時切断→再接続で得点を引き継ぐためのセッションID（タブ単位で保持）
 function getSessionId() {
@@ -47,8 +45,19 @@ export function mountPlayer(app, { roomCode = '' } = {}) {
     placeholder: 'ニックネーム',
     maxlength: CONFIG.nickMaxLen,
     autocomplete: 'off',
+    value: sessionStorage.getItem(NICK_KEY) ?? '',
   })
   const errorEl = el('p', { class: 'form-error', text: '' })
+
+  // 入力中に大文字へそろえる（コードは大文字のみ）
+  codeInput.addEventListener('input', () => {
+    const pos = codeInput.selectionStart
+    codeInput.value = codeInput.value.toUpperCase()
+    codeInput.setSelectionRange(pos, pos)
+  })
+  codeInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') nickInput.focus()
+  })
 
   function join() {
     unlockAudio() // AudioContext はユーザー操作を起点に resume する（モバイル対策）
@@ -62,6 +71,7 @@ export function mountPlayer(app, { roomCode = '' } = {}) {
       errorEl.textContent = 'ニックネームを入力してください'
       return
     }
+    sessionStorage.setItem(NICK_KEY, nick) // 再接続（リロード）時の再入力を省く
     // 再読み込みで同じ部屋に再参加できるよう URL に部屋コードを残す
     history.replaceState(null, '', `#/join/${code}`)
     startGame(app, code, nick)
@@ -115,9 +125,11 @@ function startGame(app, roomCode, nick) {
 
   const rankEl = el('div', { class: 'stat', text: '順位 —' })
   const scoreEl = el('div', { class: 'stat', text: '得点 0' })
-  const resultImg = el('img', { class: 'result-mascot', alt: '' })
-  const resultText = el('span', { text: '' })
-  const resultEl = el('div', { class: 'result-banner hidden' }, [resultImg, resultText])
+  const resultEl = el('div', { class: 'result-banner hidden', text: '' })
+
+  // 全員の得点表（自分をハイライト）
+  const boardRows = el('div', { class: 'board-rows' })
+  const boardCard = el('div', { class: 'card' }, [el('h2', { text: '得点表' }), boardRows])
 
   // --- 設定（ボタンの見た目 / 効果音） ---
   let styleClass = 'style-simple'
@@ -177,15 +189,13 @@ function startGame(app, roomCode, nick) {
   const overlayMessage = el('p', { text: '' })
   const overlayButtons = el('div', { class: 'btn-row' })
   const spinner = el('div', { class: 'spinner' })
-  const overlayMascot = el('img', { class: 'overlay-mascot', alt: '' })
-  const overlay = el('div', { class: 'overlay' }, [overlayMascot, spinner, overlayTitle, overlayMessage, overlayButtons])
+  const overlay = el('div', { class: 'overlay' }, [spinner, overlayTitle, overlayMessage, overlayButtons])
 
   function showOverlay(title, message, buttons, { withSpinner = false } = {}) {
     overlayTitle.textContent = title
     overlayMessage.textContent = message
     overlayButtons.replaceChildren(...buttons)
     spinner.classList.toggle('hidden', !withSpinner)
-    overlayMascot.src = withSpinner ? mascotFlying : mascotWrong // 待機中は飛ぶ姿、エラー時は困り顔
     overlay.classList.remove('hidden')
   }
 
@@ -208,6 +218,7 @@ function startGame(app, roomCode, nick) {
       buzzer,
       el('div', { class: 'me-row' }, [rankEl, scoreEl]),
       resultEl,
+      boardCard,
     ]),
     overlay,
   )
@@ -243,7 +254,7 @@ function startGame(app, roomCode, nick) {
     )
   }
 
-  buzzer.addEventListener('pointerdown', (ev) => {
+  const onPress = (ev) => {
     const t = performance.now() // 押下時刻を最初に確定させる
     ev.preventDefault()
     unlockAudio()
@@ -251,9 +262,18 @@ function startGame(app, roomCode, nick) {
     pressedKey = pressKey()
     transport.send({ type: MSG.BUZZ, qid: snapshot.qid, t }, hostPeerId)
     navigator.vibrate?.(50)
-    playBuzz()
+    // 押下音は部屋のルールに従う。既定（winner）では回答権を得た端末でのみ鳴る
+    if (snapshot.rules.pressSound === 'all') playBuzz()
     renderState()
-  })
+  }
+  if (window.PointerEvent) {
+    buzzer.addEventListener('pointerdown', onPress)
+  } else {
+    // iOS 12 Safari 等は PointerEvent 非対応。touchstart の preventDefault が
+    // 後続の合成 mousedown を抑止するため二重送信にはならない
+    buzzer.addEventListener('touchstart', onPress, { passive: false })
+    buzzer.addEventListener('mousedown', onPress)
+  }
   buzzer.addEventListener('contextmenu', (ev) => ev.preventDefault())
 
   // --- 状態描画（host から配信されたスナップショットを描くだけ） ---
@@ -261,7 +281,8 @@ function startGame(app, roomCode, nick) {
   function renderState() {
     if (snapshot === null) return
     phaseEl.textContent = PHASE_LABEL[snapshot.phase]
-    questionEl.textContent = snapshot.questionText !== '' ? snapshot.questionText : '（問題文なし）'
+    phaseEl.className = `phase-banner phase-${snapshot.phase}`
+    questionEl.textContent = snapshot.questionText !== '' ? snapshot.questionText : '（口頭で出題）'
 
     const me = snapshot.players.find((p) => p.playerId === playerId)
     scoreEl.textContent = `得点 ${me !== undefined ? me.score : 0}`
@@ -293,10 +314,15 @@ function startGame(app, roomCode, nick) {
         buzzerLabel.textContent = '回答してください！'
       } else {
         stateClasses.push(hasPressed() ? 'pressed' : 'dim')
-        buzzerLabel.textContent = 'ロック中'
+        const active = snapshot.players.find((p) => p.playerId === snapshot.activePlayerId)
+        buzzerLabel.textContent = active !== undefined ? `${active.nick}さんが回答中` : '回答待ち'
       }
     } else if (snapshot.phase === PHASE.QUESTION) {
+      stateClasses.push('dim')
       buzzerLabel.textContent = 'まだ押せません'
+    } else if (snapshot.phase === PHASE.RESULT) {
+      stateClasses.push('dim')
+      buzzerLabel.textContent = '次の問題待ち'
     } else {
       stateClasses.push('dim')
       buzzerLabel.textContent = '待機中'
@@ -306,20 +332,33 @@ function startGame(app, roomCode, nick) {
     if (snapshot.result !== null) {
       if (snapshot.result.correct) {
         const winner = snapshot.players.find((p) => p.playerId === snapshot.result.playerId)
-        resultText.textContent =
+        resultEl.textContent =
           snapshot.result.playerId === playerId
             ? '正解！ +1点'
             : `${winner !== undefined ? winner.nick : '？'} さんが正解`
-        resultImg.src = mascotCorrect
         resultEl.className = 'result-banner ok'
       } else {
-        resultText.textContent = '正解者なし'
-        resultImg.src = mascotWrong
+        resultEl.textContent = '正解者なし'
         resultEl.className = 'result-banner ng'
       }
     } else {
       resultEl.className = 'result-banner hidden'
     }
+
+    // 得点表（得点の高い順、自分をハイライト。ハンデは全員に見える）
+    const board = [...snapshot.players].sort((a, b) => b.score - a.score)
+    boardRows.replaceChildren(
+      ...board.map((p) =>
+        el('div', { class: p.playerId === playerId ? 'board-row me' : 'board-row' }, [
+          el('span', { class: p.connected ? 'dot on' : 'dot off' }),
+          el('span', { class: 'board-nick', text: p.nick }),
+          ...(p.handicapMs > 0
+            ? [el('span', { class: 'handicap-note', text: `ハンデ+${p.handicapMs}ms` })]
+            : []),
+          el('span', { class: 'board-score', text: `${p.score}点` }),
+        ]),
+      ),
+    )
   }
 
   // 前回スナップショットとの差分から効果音を鳴らす
@@ -346,7 +385,7 @@ function startGame(app, roomCode, nick) {
     hostPeerId = peerId
     playerId = msg.playerId
     hideOverlay()
-    setStatus('on', msg.resumed ? '確立（得点引き継ぎ）' : '確立')
+    setStatus('on', msg.resumed ? '再接続しました' : '接続済み')
   }
 
   function showRoomClosed() {
@@ -411,6 +450,6 @@ function startGame(app, roomCode, nick) {
     ])
   }, CONFIG.joinTimeoutMs)
 
-  window.addEventListener('beforeunload', () => transport.leave())
+  window.addEventListener('pagehide', () => transport.leave())
   transport.join(roomCode)
 }

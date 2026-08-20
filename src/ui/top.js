@@ -8,7 +8,7 @@ export function mountTop(app) {
     el('div', { class: 'screen top-screen' }, [
       el('img', { class: 'mascot-hero', src: mascotHero, alt: '' }),
       el('h1', { class: 'logo', text: 'Hayabuzz' }),
-      el('p', { class: 'tagline', text: 'サーバレスP2P 早押しクイズ' }),
+      el('p', { class: 'tagline', text: 'スマホが早押しボタンになるクイズアプリ' }),
       el('button', {
         class: 'btn btn-primary btn-big',
         text: '出題者として部屋を作る',

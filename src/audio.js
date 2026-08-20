@@ -9,7 +9,12 @@ export function setSoundEnabled(value) {
 
 // 「参加」ボタン等のユーザー操作ハンドラ内から呼ぶこと
 export function unlockAudio() {
-  if (ctx === null) ctx = new AudioContext()
+  if (ctx === null) {
+    // iOS 12 Safari 等は webkit プレフィックス付きのみ
+    const AudioContextImpl = window.AudioContext || window.webkitAudioContext
+    if (!AudioContextImpl) return
+    ctx = new AudioContextImpl()
+  }
   if (ctx.state === 'suspended') ctx.resume()
 }
 
@@ -27,7 +32,7 @@ function beep(freq, durationMs, type, volume = 0.15) {
   osc.stop(ctx.currentTime + durationMs / 1000)
 }
 
-// player: 早押しボタン押下音
+// player: 押下音（ルールで「押した全員に鳴る」を選んだ場合のみ使う）
 export function playBuzz() {
   beep(880, 150, 'square')
 }
@@ -38,7 +43,9 @@ export function playLock() {
   setTimeout(() => beep(784, 180, 'sine'), 90)
 }
 
-// player: 回答権が回ってきた通知音
+// player: 回答権を獲得した通知音。
+// 押下時に全員の端末で鳴らすと2位以下でも鳴ってしまうため、
+// 「1位が確定した端末」と「次点で権利が回ってきた端末」でのみ鳴らす
 export function playYourTurn() {
   beep(660, 90, 'sine', 0.18)
   setTimeout(() => beep(990, 240, 'sine', 0.18), 95)

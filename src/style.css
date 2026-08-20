@@ -221,6 +221,7 @@ textarea.input {
 
 .top-screen {
   justify-content: center;
+  min-height: 100vh; /* dvh 非対応の旧ブラウザ向けフォールバック */
   min-height: 100dvh;
   gap: 14px;
 }
@@ -369,6 +370,7 @@ textarea.input {
 /* ---- 回答者 ---- */
 
 .player-screen {
+  min-height: 100vh; /* dvh 非対応の旧ブラウザ向けフォールバック */
   min-height: 100dvh;
 }
 
@@ -379,6 +381,25 @@ textarea.input {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px;
+}
+
+/* フェーズごとの色（回答者のバナーと出題者のチップで共用） */
+.phase-armed {
+  border-color: rgba(255, 90, 70, 0.6);
+  background: rgba(255, 90, 70, 0.1);
+  color: #ff9a8d;
+}
+
+.phase-locked {
+  border-color: rgba(255, 176, 32, 0.55);
+  background: rgba(255, 176, 32, 0.08);
+  color: #ffcf70;
+}
+
+.phase-result {
+  border-color: rgba(53, 199, 123, 0.5);
+  background: rgba(53, 199, 123, 0.08);
+  color: #6fdea6;
 }
 
 .buzzer {
@@ -399,16 +420,21 @@ textarea.input {
 
 .buzzer-rig {
   position: relative;
+  /* aspect-ratio 非対応の旧ブラウザでも正方形になるよう width/height を同値で指定 */
   width: min(80vw, 44vh, 360px);
-  aspect-ratio: 1;
+  height: min(80vw, 44vh, 360px);
   pointer-events: none; /* 入力は button 全体で受ける */
 }
 
 .buzzer-base {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0; /* inset ショートハンドは Safari 14.5+ のため個別指定 */
   width: 100%;
   height: 100%;
+  -webkit-clip-path: var(--base-clip);
   clip-path: var(--base-clip);
 }
 
@@ -417,8 +443,9 @@ textarea.input {
   left: 50%;
   top: 50%;
   width: var(--cap-w, 58%);
-  aspect-ratio: 1;
+  aspect-ratio: 1; /* 非対応ブラウザでは画像の固有比率(正方形)で同じ見た目になる */
   transform: translate(-50%, -50%) translateY(-6%);
+  -webkit-clip-path: var(--cap-clip);
   clip-path: var(--cap-clip);
   filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.55));
   transition: transform 0.07s ease-out, filter 0.15s ease-out;
@@ -588,21 +615,10 @@ textarea.input {
   font-weight: 700;
 }
 
-.result-mascot {
-  width: 52px;
-  border-radius: 12px;
-  flex: none;
-}
-
 .mascot-hero {
-  width: 150px;
+  width: 120px;
   align-self: center;
-  border-radius: 20px;
-}
-
-.overlay-mascot {
-  width: 110px;
-  border-radius: 16px;
+  border-radius: 18px;
 }
 
 .result-banner.ok {
@@ -621,11 +637,63 @@ textarea.input {
   display: none;
 }
 
+/* 出題者側の判定結果ライン */
+.result-line {
+  margin: 0;
+  font-weight: 700;
+}
+
+.result-line.ok {
+  color: var(--ok);
+}
+
+.result-line.ng {
+  color: var(--ng);
+}
+
+.result-line.hidden {
+  display: none;
+}
+
+/* 回答者側の得点表 */
+.board-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.board-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.board-row.me {
+  background: rgba(77, 141, 255, 0.12);
+  outline: 1px solid rgba(77, 141, 255, 0.35);
+}
+
+.board-nick {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.board-score {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- オーバーレイ ---- */
 
 .overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0; /* inset ショートハンドは Safari 14.5+ のため個別指定 */
   background: rgba(10, 13, 17, 0.92);
   display: flex;
   flex-direction: column;
@@ -657,6 +725,35 @@ textarea.input {
   min-width: 12em;
 }
 
+.overlay .share-card {
+  width: min(92vw, 360px);
+  text-align: center;
+}
+
+.overlay .rules-card {
+  width: min(92vw, 360px);
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.handicap-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.handicap-input {
+  width: 110px;
+  flex: none;
+  padding: 8px 10px;
+}
+
+.handicap-note {
+  color: var(--warn);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
 .spinner {
   width: 34px;
   height: 34px;
@@ -673,5 +770,39 @@ textarea.input {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* 動きを抑える設定の端末では点滅・発光アニメーションを止める */
+@media (prefers-reduced-motion: reduce) {
+  .buzzer.armed .buzzer-cap,
+  .dot.wait {
+    animation: none;
+  }
+}
+
+/* flex gap 非対応の旧ブラウザ(Safari 14 以前)向けの余白フォールバック。
+   inset ショートハンド対応可否を同世代の判定に使っている */
+@supports not (inset: 0) {
+  .screen > * + * {
+    margin-top: 12px;
+  }
+
+  .card > * + *,
+  .order-list > * + * {
+    margin-top: 10px;
+  }
+
+  .btn-row > * + *,
+  .me-row > * + *,
+  .url-row > * + *,
+  .score-row > * + *,
+  .board-row > * + *,
+  .order-row > * + * {
+    margin-left: 8px;
+  }
+
+  .status > * + * {
+    margin-left: 6px;
   }
 }

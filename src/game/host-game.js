@@ -22,6 +22,8 @@ export class HostGame {
     this.excluded = new Set()
     this.activePlayerId = null
     this.result = null // { playerId, correct } | null
+    // 部屋のルール（host が変更し、state で全員に配信される）
+    this.rules = { pressSound: 'winner' } // 押下音: 'winner'=回答権を得た人だけ / 'all'=押した全員
   }
 
   // ---- 受信メッセージ（検証済みのものだけ渡すこと） ----
@@ -61,6 +63,7 @@ export class HostGame {
         sessionId: msg.sessionId,
         nick: '',
         score: 0,
+        handicapMs: 0, // 押下時刻に加算するハンデ（順位判定に反映）
         peerId: null,
         connected: false,
         sync: new PeerSync(),
@@ -96,7 +99,8 @@ export class HostGame {
     if (this.presses.some((p) => p.playerId === player.sessionId)) return
     const offset = player.sync.offset
     if (offset === null) return // 同期前は換算不能（welcome 直後のバーストで通常は即同期済み）
-    this.presses.push({ playerId: player.sessionId, hostT: toHostTime(msg.t, offset) })
+    // ハンデは換算後の押下時刻への加算として順位判定に反映する
+    this.presses.push({ playerId: player.sessionId, hostT: toHostTime(msg.t, offset) + player.handicapMs })
     this.#rejudge()
   }
 
@@ -138,9 +142,10 @@ export class HostGame {
     this.#changed()
   }
 
-  // 受付停止（仕切り直し。誤答者の除外は維持）
+  // 受付停止（仕切り直し。誤答者の除外は維持）。
+  // 誤押下のキャンセル手段として、判定待ち（LOCKED）からも戻せる
   stop() {
-    if (this.phase !== PHASE.ARMED) return
+    if (this.phase !== PHASE.ARMED && this.phase !== PHASE.LOCKED) return
     this.phase = PHASE.QUESTION
     this.armedAt = null
     this.presses = []
@@ -191,6 +196,23 @@ export class HostGame {
     const player = this.players.get(playerId)
     if (!player) return
     player.score += delta
+    this.#changed()
+  }
+
+  // ---- ルール設定 ----
+
+  setPressSound(value) {
+    if (value !== 'winner' && value !== 'all') return
+    this.rules.pressSound = value
+    this.#changed()
+  }
+
+  setHandicap(playerId, ms) {
+    const player = this.players.get(playerId)
+    if (!player) return
+    const value = Number(ms)
+    if (!Number.isFinite(value)) return
+    player.handicapMs = Math.max(0, Math.min(10000, Math.round(value)))
     this.#changed()
   }
 
@@ -264,6 +286,7 @@ export class HostGame {
         nick: p.nick,
         score: p.score,
         connected: p.connected,
+        handicapMs: p.handicapMs,
       })),
       order: this.order.map((o) => ({
         playerId: o.playerId,
@@ -272,6 +295,7 @@ export class HostGame {
       activePlayerId: this.activePlayerId,
       excluded: [...this.excluded],
       result: this.result,
+      rules: { pressSound: this.rules.pressSound },
     }
   }
 

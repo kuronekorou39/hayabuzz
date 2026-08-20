@@ -63,9 +63,9 @@ test('複数端末: 3人参加（1人はスマホ）で押下順・次点・再�
     expect(deltas[i]).toBeGreaterThanOrEqual(deltas[i - 1])
   }
 
-  // 1位が回答権を持ち、他はロックされてボタンが無効
+  // 1位が回答権を持ち、他はロックされて誰が回答中か表示される
   await expect(first.page.locator('.buzzer-label')).toHaveText('回答してください！')
-  await expect(second.page.locator('.buzzer-label')).toHaveText('ロック中')
+  await expect(second.page.locator('.buzzer-label')).toHaveText(`${first.nick}さんが回答中`)
 
   // --- 不正解 → 次点者に権利を回す ---
   await host.page.getByRole('button', { name: '不正解→次点へ' }).click()
@@ -95,6 +95,22 @@ test('複数端末: 3人参加（1人はスマホ）で押下順・次点・再�
   await expect(first.page.locator('.stat', { hasText: '得点' })).toHaveText('得点 1')
   await host.page.locator('.score-row', { hasText: first.nick }).getByRole('button', { name: '−' }).click()
   await expect(first.page.locator('.stat', { hasText: '得点' })).toHaveText('得点 0')
+
+  // --- ルール: ハンデを付けた player は同時押しでも順位が下がる ---
+  await host.page.getByRole('button', { name: 'ルール' }).click()
+  const handicapInput = host.page.locator('.handicap-row', { hasText: 'たろう' }).locator('input')
+  await handicapInput.fill('1000')
+  await handicapInput.blur()
+  await host.page.locator('.rules-overlay').getByRole('button', { name: '閉じる' }).click()
+  // ハンデは全端末の得点表に表示される
+  await expect(host.page.locator('.score-row', { hasText: 'たろう' })).toContainText('ハンデ+1000ms')
+  await expect(p2.page.locator('.board-row', { hasText: 'たろう' })).toContainText('ハンデ+1000ms')
+
+  await raceBuzz(host, [p1, p2, p3], 'ハンデ確認')
+  const nicksAfter = await host.page.locator('.order-nick').allTextContents()
+  expect(nicksAfter[2]).toBe('たろう') // 1秒のハンデで最下位になる
+  const deltasAfter = (await host.page.locator('.order-delta').allTextContents()).map((t) => parseFloat(t.slice(1)))
+  expect(deltasAfter[2]).toBeGreaterThanOrEqual(900)
 
   for (const p of [p1, p2, p3]) await p.context.close()
   await host.context.close()

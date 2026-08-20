@@ -14,7 +14,10 @@ export function createTrysteroTransport() {
     selfId,
 
     join(roomId) {
-      room = joinRoom({ appId: CONFIG.appId }, roomId)
+      room = joinRoom(
+        { appId: CONFIG.appId, rtcConfig: { iceServers: CONFIG.iceServers } },
+        roomId,
+      )
       const action = room.makeAction('msg')
       action.onMessage = (data, { peerId }) => {
         for (const handler of messageHandlers) handler(data, peerId)

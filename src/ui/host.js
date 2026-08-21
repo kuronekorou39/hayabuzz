@@ -253,8 +253,9 @@ export function mountHost(app) {
     try {
       await transport.enableLegacyCompat()
       legacyCompatBtn.textContent = '有効'
-    } catch {
-      legacyCompatBtn.textContent = '許可されませんでした'
+    } catch (err) {
+      // NotFoundError はマイク非搭載。詳細は接続診断にも記録される
+      legacyCompatBtn.textContent = err.name === 'NotFoundError' ? 'マイクがありません' : `失敗: ${err.name}`
       legacyCompatBtn.disabled = false
     }
   } })

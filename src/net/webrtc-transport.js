@@ -253,8 +253,14 @@ export function createWebrtcTransport({ role }) {
   // 実 IP を含めるようになり（mDNS の .local 名を解決できない iOS 12 等の
   // 旧 WebRTC でも）同一 LAN で直結できるようになる。音声は一切使わない
   async function enableLegacyCompat() {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    for (const track of stream.getTracks()) track.stop()
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      for (const track of stream.getTracks()) track.stop()
+    } catch (err) {
+      // NotFoundError=マイク非搭載 / NotAllowedError=許可拒否 など
+      diagLog('互換モード失敗', `${err.name} ${err.message}`)
+      throw err
+    }
     diagLog('互換モード', 'マイク許可OK（実IP候補が有効）')
     // 既存の待ち受け offer は mDNS 候補のままなので作り直す
     for (const entry of offerPool.values()) entry.pc.close()

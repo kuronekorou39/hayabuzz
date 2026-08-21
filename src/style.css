@@ -929,6 +929,78 @@ textarea.input {
   display: none;
 }
 
+/* 一斉回答（○×・4択）の回答パネル */
+.answer-panel {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.answer-panel.hidden {
+  display: none;
+}
+
+.answer-panel.grid-ox {
+  grid-template-columns: 1fr 1fr;
+}
+
+.answer-panel.grid-choice4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.answer-panel.dim {
+  opacity: 0.55;
+}
+
+.answer-btn {
+  border: 2px solid var(--border);
+  border-radius: 18px;
+  background: var(--card-2);
+  color: var(--fg);
+  font-size: 2.4rem;
+  font-weight: 800;
+  touch-action: manipulation;
+  min-height: 0;
+}
+
+.answer-btn.answer-o {
+  color: var(--ok);
+}
+
+.answer-btn.answer-x {
+  color: var(--ng);
+}
+
+.answer-btn.selected {
+  outline: 3px solid var(--primary);
+  outline-offset: -3px;
+}
+
+.answer-btn.correct {
+  border-color: var(--ok);
+  background: rgba(53, 199, 123, 0.15);
+}
+
+.answer-btn.wrong-pick {
+  border-color: var(--ng);
+  background: rgba(255, 107, 107, 0.12);
+}
+
+/* 結果発表 */
+.final-rank {
+  width: 3.2em;
+  color: var(--dim);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.final-rank.final-top {
+  color: var(--warn);
+}
+
 /* 答え・メモの手元表示（出題者のみ） */
 .answer-note {
   margin: 0;

@@ -32,8 +32,15 @@ export class HostGame {
       wrongPoints: 0, // 誤答の得点（0以下のペナルティ）
       winScore: 0, // 勝ち抜けライン（0=なし。達した人に「勝ち抜け」表示）
       teams: 0, // チーム数（0=個人戦、2〜4）
+      answerMode: 'buzzer', // 回答形式: 'buzzer'=早押し / 'ox'=○× / 'choice4'=4択（一斉回答）
     }
     this.revealBase = 0 // 読み上げの確定位置（文字数）。押下で凍結し、再開放で続きから
+    this.answers = new Map() // 一斉回答モードの回答（sessionId → 値。締切まで上書き可）
+    this.correctValue = null // 一斉回答モードで発表した正答
+  }
+
+  get isMassAnswerMode() {
+    return this.rules.answerMode !== 'buzzer'
   }
 
   // ---- 受信メッセージ（検証済みのものだけ渡すこと） ----
@@ -48,6 +55,9 @@ export class HostGame {
         break
       case MSG.BUZZ:
         this.#handleBuzz(msg, peerId)
+        break
+      case MSG.ANSWER:
+        this.#handleAnswer(msg, peerId)
         break
       // host → player 方向の型が届いても無視する
     }
@@ -113,9 +123,26 @@ export class HostGame {
     }
   }
 
+  // 一斉回答モードで許される回答値か
+  #isValidAnswer(value) {
+    if (this.rules.answerMode === 'ox') return value === 'o' || value === 'x'
+    if (this.rules.answerMode === 'choice4') return ['1', '2', '3', '4'].includes(value)
+    return false
+  }
+
+  #handleAnswer(msg, peerId) {
+    const player = this.#byPeer(peerId)
+    if (!player) return
+    if (!this.isMassAnswerMode || this.phase !== PHASE.ARMED) return
+    if (msg.qid !== this.qid || !this.#isValidAnswer(msg.value)) return
+    this.answers.set(player.sessionId, msg.value) // 締切までは変更可（最後の回答が有効）
+    this.#changed()
+  }
+
   #handleBuzz(msg, peerId) {
     const player = this.#byPeer(peerId)
     if (!player) return
+    if (this.isMassAnswerMode) return // 一斉回答モードでは早押しを受け付けない
     if (this.phase !== PHASE.ARMED && this.phase !== PHASE.LOCKED) return
     if (msg.qid !== this.qid || this.armedAt === null) return
     if (this.excluded.has(player.sessionId)) return
@@ -165,6 +192,8 @@ export class HostGame {
     this.activePlayerId = null
     this.result = null
     this.revealBase = 0 // 読み上げは新しい問題の先頭から
+    this.answers.clear()
+    this.correctValue = null
     this.#changed()
   }
 
@@ -180,9 +209,33 @@ export class HostGame {
     this.#changed()
   }
 
-  // 受付停止（仕切り直し。誤答者の除外は維持）。
+  // 一斉回答の締め切り（○×・4択）。以後の回答変更を受け付けない
+  closeAnswers() {
+    if (!this.isMassAnswerMode || this.phase !== PHASE.ARMED) return
+    this.#freezeReveal()
+    this.phase = PHASE.LOCKED
+    this.#changed()
+  }
+
+  // 一斉回答の正答を発表して自動採点する
+  declareCorrect(value) {
+    if (!this.isMassAnswerMode || this.phase !== PHASE.LOCKED) return
+    if (!this.#isValidAnswer(value)) return
+    this.correctValue = value
+    for (const player of this.players.values()) {
+      const answer = this.answers.get(player.sessionId)
+      if (answer === undefined) continue // 未回答は増減なし
+      player.score += answer === value ? this.rules.correctPoints : this.rules.wrongPoints
+    }
+    this.phase = PHASE.RESULT
+    this.revealBase = this.questionText.length
+    this.#changed()
+  }
+
+  // 受付停止（早押しの仕切り直し。誤答者の除外は維持）。
   // 誤押下のキャンセル手段として、判定待ち（LOCKED）からも戻せる
   stop() {
+    if (this.isMassAnswerMode) return
     if (this.phase !== PHASE.ARMED && this.phase !== PHASE.LOCKED) return
     this.#freezeReveal()
     this.phase = PHASE.QUESTION
@@ -257,6 +310,26 @@ export class HostGame {
     this.#changed()
   }
 
+  // ---- 結果発表 ----
+
+  finishGame() {
+    if (this.phase === PHASE.FINAL) return
+    this.phase = PHASE.FINAL
+    this.#changed()
+  }
+
+  resumeGame() {
+    if (this.phase !== PHASE.FINAL) return
+    this.phase = PHASE.WAITING
+    this.#changed()
+  }
+
+  resetScores() {
+    for (const player of this.players.values()) player.score = 0
+    if (this.phase === PHASE.FINAL) this.phase = PHASE.WAITING
+    this.#changed()
+  }
+
   // 手動加減点
   adjustScore(playerId, delta) {
     const player = this.players.get(playerId)
@@ -314,6 +387,12 @@ export class HostGame {
   }
 
   // ---- チーム ----
+
+  setAnswerMode(value) {
+    if (!['buzzer', 'ox', 'choice4'].includes(value)) return
+    this.rules.answerMode = value
+    this.#changed()
+  }
 
   setTeams(value) {
     const count = Number(value)
@@ -472,6 +551,12 @@ export class HostGame {
       result: this.result,
       rules: { ...this.rules },
       revealBase: Math.round(this.revealBase * 10) / 10,
+      answeredIds: [...this.answers.keys()],
+      revealedAnswers:
+        this.isMassAnswerMode && (this.phase === PHASE.LOCKED || this.phase === PHASE.RESULT)
+          ? [...this.answers.entries()].map(([playerId, value]) => ({ playerId, value }))
+          : null, // 締切までは回答内容を配信しない（覗き見・コピー防止）
+      correctValue: this.correctValue,
     }
   }
 

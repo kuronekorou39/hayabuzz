@@ -1,6 +1,6 @@
 import { playBuzz, playCorrect, playWrong, playYourTurn, setSoundEnabled, unlockAudio } from '../audio.js'
 import { CONFIG } from '../config.js'
-import { PHASE, PHASE_LABEL } from '../game/phases.js'
+import { MASS_PHASE_LABEL, PHASE, PHASE_LABEL } from '../game/phases.js'
 import { MSG, PROTO_VERSION, validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
 import { teamMeta, teamTotals } from '../game/teams.js'
@@ -134,6 +134,47 @@ function startGame(app, roomCode, nick) {
   const buzzerRig = el('div', { class: 'buzzer-rig' }, [buzzerBase, buzzerCap, buzzerLabel])
   const buzzer = el('button', { class: 'buzzer' }, [buzzerRig])
 
+  // 一斉回答（○×・4択）の回答パネル。早押しボタンの代わりに表示する
+  const answerPanel = el('div', { class: 'answer-panel hidden' })
+  let selectedValue = null
+  let answerQid = null
+  let builtAnswerMode = null
+
+  function sendAnswer(value) {
+    if (snapshot === null || snapshot.phase !== PHASE.ARMED || hostPeerId === null) return
+    unlockAudio()
+    selectedValue = value
+    answerQid = snapshot.qid
+    transport.send({ type: MSG.ANSWER, qid: snapshot.qid, value }, hostPeerId)
+    navigator.vibrate?.(30)
+    renderState()
+  }
+
+  function buildAnswerPanel(mode) {
+    const options =
+      mode === 'ox'
+        ? [{ value: 'o', label: '○', cls: 'answer-o' }, { value: 'x', label: '×', cls: 'answer-x' }]
+        : ['1', '2', '3', '4'].map((n) => ({ value: n, label: n, cls: 'answer-choice' }))
+    answerPanel.className = `answer-panel ${mode === 'ox' ? 'grid-ox' : 'grid-choice4'}`
+    answerPanel.replaceChildren(
+      ...options.map((option) =>
+        el('button', {
+          class: `answer-btn ${option.cls}`,
+          text: option.label,
+          'data-value': option.value,
+          onclick: () => sendAnswer(option.value),
+        }),
+      ),
+    )
+  }
+
+  // 結果発表（最終ランキング）
+  const finalTotals = el('div', { class: 'team-totals' })
+  const finalRows = el('div', { class: 'board-rows' })
+  const finalOverlay = el('div', { class: 'overlay final-overlay hidden' }, [
+    el('div', { class: 'card board-card' }, [el('h2', { text: '結果発表' }), finalTotals, finalRows]),
+  ])
+
   // 下部バー: 自分の所属チーム・得点の要約 + 得点表を開くボタン
   const myTeamChip = el('span', { class: 'team-chip hidden', text: '' })
   const meSummary = el('span', { class: 'me-summary', text: '—' })
@@ -234,10 +275,12 @@ function startGame(app, roomCode, nick) {
       phaseEl,
       questionEl,
       buzzer,
+      answerPanel,
       bottomBar,
     ]),
     overlay,
     boardOverlay,
+    finalOverlay,
     toastBox,
   )
   applyBuzzerStyle(prefs.buttonStyle)
@@ -366,7 +409,8 @@ function startGame(app, roomCode, nick) {
 
   function renderState() {
     if (snapshot === null) return
-    phaseEl.textContent = PHASE_LABEL[snapshot.phase]
+    const mass = snapshot.rules.answerMode !== 'buzzer'
+    phaseEl.textContent = (mass ? MASS_PHASE_LABEL[snapshot.phase] : undefined) ?? PHASE_LABEL[snapshot.phase]
     phaseEl.className = `phase-banner phase-${snapshot.phase}`
     // 新しい問題が来たら出現アニメーションを付ける
     if (questionEl.dataset.qid !== String(snapshot.qid)) {
@@ -377,11 +421,75 @@ function startGame(app, roomCode, nick) {
     }
     renderQuestionText()
 
+    // 一斉回答モードでは早押しボタンの代わりに回答パネルを表示する
+    buzzer.style.display = mass ? 'none' : ''
+    if (mass) {
+      if (builtAnswerMode !== snapshot.rules.answerMode) {
+        builtAnswerMode = snapshot.rules.answerMode
+        buildAnswerPanel(snapshot.rules.answerMode)
+        selectedValue = null
+      }
+      answerPanel.classList.remove('hidden')
+      if (answerQid !== snapshot.qid) selectedValue = null // 新しい問題で選択をリセット
+      const canAnswer = snapshot.phase === PHASE.ARMED
+      // 締切後は host 配信の回答が正、受付中はローカルの選択を表示
+      const myAnswer =
+        snapshot.revealedAnswers?.find((a) => a.playerId === playerId)?.value ??
+        (answerQid === snapshot.qid ? selectedValue : null)
+      answerPanel.classList.toggle('dim', !canAnswer && snapshot.correctValue === null)
+      for (const button of answerPanel.children) {
+        const value = button.dataset.value
+        button.disabled = !canAnswer
+        button.classList.toggle('selected', value === myAnswer)
+        button.classList.toggle('correct', snapshot.correctValue !== null && value === snapshot.correctValue)
+        button.classList.toggle(
+          'wrong-pick',
+          snapshot.correctValue !== null && value === myAnswer && value !== snapshot.correctValue,
+        )
+      }
+    } else {
+      answerPanel.classList.add('hidden')
+    }
+
+    // 結果発表（最終ランキング）
+    if (snapshot.phase === PHASE.FINAL) {
+      if (snapshot.rules.teams > 0) {
+        finalTotals.replaceChildren(
+          ...teamTotals(snapshot.players, snapshot.rules.teams)
+            .sort((a, b) => b.score - a.score)
+            .map((t) => {
+              const meta = teamMeta(t.team)
+              return el('span', { class: `team-chip ${meta.cls}`, text: `${meta.label} ${t.score}点` })
+            }),
+        )
+      } else {
+        finalTotals.replaceChildren()
+      }
+      const ranking = [...snapshot.players].sort((a, b) => b.score - a.score)
+      finalRows.replaceChildren(
+        ...ranking.map((p, index) => {
+          const meta = snapshot.rules.teams > 0 ? teamMeta(p.team) : null
+          return el('div', { class: p.playerId === playerId ? 'board-row me' : 'board-row' }, [
+            el('span', { class: index === 0 ? 'final-rank final-top' : 'final-rank', text: `${index + 1}位` }),
+            ...(meta !== null ? [el('span', { class: `team-chip ${meta.cls}`, text: meta.label })] : []),
+            el('span', { class: 'board-nick', text: p.nick }),
+            el('span', { class: 'board-score', text: `${p.score}点` }),
+          ])
+        }),
+      )
+      finalOverlay.classList.remove('hidden')
+    } else {
+      finalOverlay.classList.add('hidden')
+    }
+
     const excluded = snapshot.excluded.includes(playerId)
     stateClasses = []
     if (excluded) {
       stateClasses.push('dim')
       buzzerLabel.textContent = '誤答のため待機'
+    } else if (snapshot.phase === PHASE.FINAL) {
+      stateClasses.push('dim')
+      buzzerLabel.textContent = '結果発表'
     } else if (snapshot.phase === PHASE.ARMED) {
       if (hasPressed()) {
         stateClasses.push('pressed')
@@ -503,13 +611,26 @@ function startGame(app, roomCode, nick) {
         const winner = next.players.find((p) => p.playerId === next.result.playerId)
         showToast(
           next.result.playerId === playerId
-            ? '正解！ +1点'
+            ? `正解！ +${next.rules.correctPoints}点`
             : `${winner !== undefined ? winner.nick : '？'} さんが正解`,
           'ok',
         )
       } else {
         playWrong()
         showToast('正解者なし', 'ng')
+      }
+    }
+    // 一斉回答の正答が発表された
+    if (next.correctValue !== null && prev.correctValue === null) {
+      const mine = next.revealedAnswers?.find((a) => a.playerId === playerId)?.value
+      if (mine === undefined) {
+        showToast('未回答', '')
+      } else if (mine === next.correctValue) {
+        playCorrect()
+        showToast(`正解！ +${next.rules.correctPoints}点`, 'ok')
+      } else {
+        playWrong()
+        showToast('不正解…', 'ng')
       }
     }
   }

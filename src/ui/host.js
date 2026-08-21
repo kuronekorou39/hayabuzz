@@ -134,6 +134,7 @@ export function mountHost(app) {
   } })
   const armBtn = el('button', { class: 'btn btn-arm', text: '早押し開始', onclick: () => game.arm() })
   const stopBtn = el('button', { class: 'btn', text: '受付停止', onclick: () => game.stop() })
+  const closeAnswersBtn = el('button', { class: 'btn', text: '締め切り', onclick: () => game.closeAnswers() })
 
   const phaseEl = el('span', { class: 'phase-chip', text: PHASE_LABEL[PHASE.WAITING] })
   const currentQuestionEl = el('div', { class: 'question-text question-clamp', text: 'まだ問題がありません' })
@@ -172,6 +173,31 @@ export function mountHost(app) {
     game.judgeWrongOpenOtherTeams()
   } })
 
+  // 一斉回答モードの回答状況と正答宣言
+  const answersLine = el('p', { class: 'placeholder answers-line', text: '' })
+  const declareRow = el('div', { class: 'btn-row' })
+
+  function buildDeclareButtons() {
+    const options =
+      game.rules.answerMode === 'ox'
+        ? [{ value: 'o', label: '正解は○' }, { value: 'x', label: '正解は×' }]
+        : ['1', '2', '3', '4'].map((n) => ({ value: n, label: `正解は${n}` }))
+    declareRow.replaceChildren(
+      ...options.map((option) =>
+        el('button', { class: 'btn btn-ok', text: option.label, onclick: () => {
+          playCorrect()
+          game.declareCorrect(option.value)
+        } }),
+      ),
+    )
+  }
+
+  const finishBtn = el('button', { class: 'btn', text: '結果発表', onclick: () => {
+    if (game.phase === PHASE.FINAL) game.resumeGame()
+    else game.finishGame()
+  } })
+  const resetScoresBtn = el('button', { class: 'btn btn-ng', text: '得点リセット', onclick: () => game.resetScores() })
+
   const soundCheck = el('input', { type: 'checkbox' })
   soundCheck.checked = prefs.sound
   soundCheck.addEventListener('change', () => {
@@ -190,7 +216,14 @@ export function mountHost(app) {
     shareOverlay.classList.remove('hidden')
   } })
 
-  // --- ルール設定オーバーレイ（問題の表示・押下音・復帰・ハンデ） ---
+  // --- ルール設定オーバーレイ（回答形式・問題の表示・押下音・復帰・ハンデ） ---
+  const answerModeSelect = el('select', { class: 'input' }, [
+    el('option', { value: 'buzzer', text: '早押し' }),
+    el('option', { value: 'ox', text: '○×クイズ（一斉回答）' }),
+    el('option', { value: 'choice4', text: '4択クイズ（一斉回答）' }),
+  ])
+  answerModeSelect.addEventListener('change', () => game.setAnswerMode(answerModeSelect.value))
+
   const revealSelect = el('select', { class: 'input' }, [
     el('option', { value: 'all', text: '一括で表示' }),
     el('option', { value: 'serial', text: '順次表示（読み上げ）' }),
@@ -239,6 +272,7 @@ export function mountHost(app) {
   const rulesOverlay = el('div', { class: 'overlay rules-overlay hidden' }, [
     el('div', { class: 'card rules-card' }, [
       el('h2', { text: 'ルール設定' }),
+      el('label', { class: 'settings-row' }, [el('span', { text: '回答形式' }), answerModeSelect]),
       el('label', { class: 'settings-row' }, [el('span', { text: '問題の表示' }), revealSelect]),
       el('label', { class: 'settings-row' }, [el('span', { text: '読み上げ速度' }), revealSpeedSelect]),
       el('label', { class: 'settings-row' }, [el('span', { text: '押下音' }), pressSoundSelect]),
@@ -258,6 +292,7 @@ export function mountHost(app) {
   ])
 
   function openRules() {
+    answerModeSelect.value = game.rules.answerMode
     revealSelect.value = game.rules.reveal
     revealSpeedSelect.value = String(game.rules.revealCps)
     pressSoundSelect.value = game.rules.pressSound
@@ -443,16 +478,19 @@ export function mountHost(app) {
         el('div', { class: 'card' }, [
           el('h2', { text: '問題' }),
           questionInput,
-          el('div', { class: 'btn-row' }, [showBtn, askNextBtn, armBtn, stopBtn]),
+          el('div', { class: 'btn-row' }, [showBtn, askNextBtn, armBtn, stopBtn, closeAnswersBtn]),
         ]),
         el('div', { class: 'card' }, [
           el('div', { class: 'topbar' }, [el('h2', { text: '進行' }), phaseEl]),
           currentQuestionEl,
           answerLine,
+          answersLine,
           orderPlaceholder,
           orderList,
           resultLine,
           el('div', { class: 'btn-row' }, [correctBtn, wrongNextBtn, wrongOpenBtn, wrongTeamBtn]),
+          declareRow,
+          el('div', { class: 'btn-row' }, [finishBtn, resetScoresBtn]),
           el('label', { class: 'settings-row' }, [el('span', { text: '効果音（この端末で鳴らす）' }), soundCheck]),
         ]),
         scoreCard,
@@ -467,6 +505,12 @@ export function mountHost(app) {
 
   let prevPhase = game.phase
   let revealTimer = null
+  let lastDeclareMode = null
+
+  function answerValueLabel(value) {
+    if (game.rules.answerMode === 'ox') return value === 'o' ? '○' : '×'
+    return value
+  }
 
   // 問題文の表示（順次表示ルールでは読み上げ位置までを描画する）
   function renderQuestionText() {
@@ -517,6 +561,20 @@ export function mountHost(app) {
     showBtn.disabled = game.phase === PHASE.ARMED || game.phase === PHASE.LOCKED
     askNextBtn.disabled = showBtn.disabled || nextUnasked(bankItems) === null
 
+    // 回答形式によるボタンの出し分け
+    const mass = game.isMassAnswerMode
+    armBtn.textContent = mass ? '回答受付開始' : '早押し開始'
+    stopBtn.style.display = mass ? 'none' : ''
+    closeAnswersBtn.style.display = mass ? '' : 'none'
+    closeAnswersBtn.disabled = game.phase !== PHASE.ARMED
+    finishBtn.textContent = game.phase === PHASE.FINAL ? 'ゲームに戻る' : '結果発表'
+    declareRow.style.display = mass ? '' : 'none'
+    if (mass && lastDeclareMode !== game.rules.answerMode) {
+      lastDeclareMode = game.rules.answerMode
+      buildDeclareButtons()
+    }
+    for (const button of declareRow.children) button.disabled = game.phase !== PHASE.LOCKED
+
     // セット問題の答え・メモ（この端末にだけ表示。P2Pには流れない）
     const bankItem = currentBankId !== null ? bankItems.find((i) => i.id === currentBankId) : undefined
     if (bankItem !== undefined) {
@@ -528,12 +586,15 @@ export function mountHost(app) {
     }
     armBtn.disabled = game.phase !== PHASE.QUESTION
     stopBtn.disabled = game.phase !== PHASE.ARMED && game.phase !== PHASE.LOCKED
-    const canJudge = game.phase === PHASE.LOCKED && game.activePlayerId !== null
+    const canJudge = !mass && game.phase === PHASE.LOCKED && game.activePlayerId !== null
     correctBtn.disabled = !canJudge
     wrongNextBtn.disabled = !canJudge
     wrongOpenBtn.disabled = !canJudge
     wrongTeamBtn.disabled = !canJudge
-    wrongTeamBtn.style.display = game.rules.teams === 0 ? 'none' : ''
+    correctBtn.style.display = mass ? 'none' : ''
+    wrongNextBtn.style.display = mass ? 'none' : ''
+    wrongOpenBtn.style.display = mass ? 'none' : ''
+    wrongTeamBtn.style.display = mass || game.rules.teams === 0 ? 'none' : ''
 
     // チーム合計（チーム戦のみ）
     if (game.rules.teams > 0) {
@@ -552,35 +613,68 @@ export function mountHost(app) {
     if (game.result !== null) {
       if (game.result.correct) {
         const winner = game.players.get(game.result.playerId)
-        resultLine.textContent = `正解: ${winner !== undefined ? winner.nick : '？'} さん（+1点）`
+        resultLine.textContent = `正解: ${winner !== undefined ? winner.nick : '？'} さん（+${game.rules.correctPoints}点）`
         resultLine.className = 'result-line ok'
       } else {
         resultLine.textContent = '正解者なし'
         resultLine.className = 'result-line ng'
       }
+    } else if (mass && game.correctValue !== null) {
+      const correctCount = [...game.answers.values()].filter((v) => v === game.correctValue).length
+      resultLine.textContent = `正解は${answerValueLabel(game.correctValue)}（${correctCount}人正解）`
+      resultLine.className = 'result-line ok'
     } else {
       resultLine.className = 'result-line hidden'
     }
 
-    // 押下順リスト（1位からのms差）
-    orderPlaceholder.style.display = game.order.length === 0 ? '' : 'none'
-    orderList.replaceChildren(
-      ...game.order.map((entry) => {
-        const player = game.players.get(entry.playerId)
-        const badges = []
-        if (entry.playerId === game.activePlayerId) {
-          badges.push(el('span', { class: 'badge active', text: '回答権' }))
-        }
-        if (game.excluded.has(entry.playerId)) {
-          badges.push(el('span', { class: 'badge ng', text: '誤答' }))
-        }
-        return el('li', { class: 'order-row' }, [
-          el('span', { class: 'order-nick', text: player !== undefined ? player.nick : '？' }),
-          el('span', { class: 'order-delta', text: `+${entry.deltaMs.toFixed(1)}ms` }),
-          ...badges,
-        ])
-      }),
-    )
+    if (mass) {
+      // 一斉回答: 受付中は回答済み人数のみ、締切後に回答内容を一覧表示
+      orderPlaceholder.style.display = 'none'
+      if (game.phase === PHASE.ARMED) {
+        answersLine.textContent = `回答済み ${game.answers.size}/${connectedCount}人`
+        answersLine.style.display = ''
+      } else {
+        answersLine.style.display = 'none'
+      }
+      if (game.phase === PHASE.LOCKED || game.phase === PHASE.RESULT) {
+        orderList.replaceChildren(
+          ...[...game.answers.entries()].map(([playerId, value]) => {
+            const player = game.players.get(playerId)
+            const isCorrect = game.correctValue !== null && value === game.correctValue
+            return el('li', { class: 'order-row' }, [
+              el('span', { class: 'order-nick', text: player !== undefined ? player.nick : '？' }),
+              el('span', { class: 'order-delta', text: answerValueLabel(value) }),
+              ...(game.correctValue !== null
+                ? [el('span', { class: isCorrect ? 'badge active' : 'badge ng', text: isCorrect ? '正解' : '不正解' })]
+                : []),
+            ])
+          }),
+        )
+      } else {
+        orderList.replaceChildren()
+      }
+    } else {
+      // 押下順リスト（1位からのms差）
+      answersLine.style.display = 'none'
+      orderPlaceholder.style.display = game.order.length === 0 ? '' : 'none'
+      orderList.replaceChildren(
+        ...game.order.map((entry) => {
+          const player = game.players.get(entry.playerId)
+          const badges = []
+          if (entry.playerId === game.activePlayerId) {
+            badges.push(el('span', { class: 'badge active', text: '回答権' }))
+          }
+          if (game.excluded.has(entry.playerId)) {
+            badges.push(el('span', { class: 'badge ng', text: '誤答' }))
+          }
+          return el('li', { class: 'order-row' }, [
+            el('span', { class: 'order-nick', text: player !== undefined ? player.nick : '？' }),
+            el('span', { class: 'order-delta', text: `+${entry.deltaMs.toFixed(1)}ms` }),
+            ...badges,
+          ])
+        }),
+      )
+    }
 
     // 参加者・得点（手動加減点つき）
     const players = [...game.players.values()]

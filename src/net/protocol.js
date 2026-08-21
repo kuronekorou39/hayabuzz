@@ -8,6 +8,7 @@ export const MSG = {
   HELLO: 'hello', // 参加/再参加要求
   PONG: 'pong', // ping への応答
   BUZZ: 'buzz', // 早押し
+  ANSWER: 'answer', // 一斉回答（○× / 4択）の回答
   // host → player
   WELCOME: 'welcome', // 参加受理
   REJECTED: 'rejected', // 参加拒否
@@ -39,6 +40,7 @@ const SCHEMAS = {
   [MSG.HELLO]: { proto: isNum, sessionId: id, nick },
   [MSG.PONG]: { seq: isNum, t: isNum },
   [MSG.BUZZ]: { qid: isNum, t: isNum },
+  [MSG.ANSWER]: { qid: isNum, value: str(100) },
   [MSG.WELCOME]: { playerId: id, resumed: isBool },
   [MSG.REJECTED]: { reason: str(100) },
   [MSG.PING]: { seq: isNum },
@@ -63,8 +65,12 @@ const SCHEMAS = {
       wrongPoints: isNum,
       winScore: isNum,
       teams: isNum,
+      answerMode: oneOf(['buzzer', 'ox', 'choice4']),
     }),
     revealBase: isNum, // 読み上げ（順次表示）の確定位置
+    answeredIds: arrayOf(id), // 一斉回答モードで回答済みの player（内容は締切まで隠す）
+    revealedAnswers: nullable(arrayOf(shapeOf({ playerId: id, value: str(100) }))),
+    correctValue: nullable(str(100)), // 一斉回答モードの正答（発表後）
   },
 }
 

@@ -8,7 +8,9 @@ import { dirname, resolve } from 'node:path'
 import { chromium } from 'playwright'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const OUT_DIR = resolve(root, 'src/assets/buzzer')
+// WebP 非対応の旧ブラウザ(iOS 12 Safari等)向けに PNG も併備するため、
+// ハッシュ付与されない public/ に両形式で出力する
+const OUT_DIR = resolve(root, 'public/buzzer')
 const OUT_SIZE = 640
 const WEBP_QUALITY = 0.85
 
@@ -133,7 +135,7 @@ try {
     )
   }
 
-  // 切り出して WebP 保存
+  // 切り出して WebP + PNG の両形式で保存
   await mkdir(OUT_DIR, { recursive: true })
   for (const spec of SPRITES) {
     const box = detections[spec.file].boxes[spec.index]
@@ -142,7 +144,7 @@ try {
     const cy = box.y + box.h / 2 + (spec.dy ?? 0) * box.h
     const side = Math.max(box.w, box.h) * (spec.pad ?? 1)
     const url = sourceUrls[spec.file]
-    const dataUrl = await page.evaluate(
+    const dataUrls = await page.evaluate(
       async ({ src, cx, cy, side, out, q }) => {
         const img = new Image()
         img.src = src
@@ -155,13 +157,16 @@ try {
         ctx.fillStyle = '#fff'
         ctx.fillRect(0, 0, out, out)
         ctx.drawImage(img, cx - side / 2, cy - side / 2, side, side, 0, 0, out, out)
-        return c.toDataURL('image/webp', q)
+        // 旧ブラウザ用は JPEG（表示側で clip-path するため透過は不要。PNG は写真的画像で肥大する）
+        return { webp: c.toDataURL('image/webp', q), jpg: c.toDataURL('image/jpeg', 0.82) }
       },
       { src: url, cx, cy, side, out: OUT_SIZE, q: WEBP_QUALITY },
     )
-    const buf = Buffer.from(dataUrl.split(',')[1], 'base64')
-    await writeFile(resolve(OUT_DIR, `${spec.name}.webp`), buf)
-    console.log(`${spec.name}.webp (${(buf.length / 1024).toFixed(0)} KB)`)
+    for (const [ext, dataUrl] of Object.entries(dataUrls)) {
+      const buf = Buffer.from(dataUrl.split(',')[1], 'base64')
+      await writeFile(resolve(OUT_DIR, `${spec.name}.${ext}`), buf)
+      console.log(`${spec.name}.${ext} (${(buf.length / 1024).toFixed(0)} KB)`)
+    }
   }
 
   // ダーク背景に台+ボタンを重ねたプレビューを撮る（clip の食い込みや白フチの確認用）

@@ -9,6 +9,7 @@ import { loadPrefs, savePrefs } from '../prefs.js'
 import { el } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
 import { BUZZER_STYLES, getBuzzerStyle } from './buzzer-styles.js'
+import { buzzerSprite, spriteFormatReady } from './sprites.js'
 
 const SESSION_KEY = 'hayabuzz.sessionId'
 const NICK_KEY = 'hayabuzz.nick' // タブのセッション内のみ保持（localStorage には保存しない）
@@ -204,8 +205,8 @@ function startGame(app, roomCode, nick) {
       styleClass = 'style-simple'
     } else {
       styleClass = 'style-img'
-      buzzerBase.src = style.base
-      buzzerCap.src = style.cap
+      buzzerBase.src = buzzerSprite(style.base)
+      buzzerCap.src = buzzerSprite(style.cap)
       buzzer.style.setProperty('--base-clip', style.baseClip)
       buzzer.style.setProperty('--cap-clip', style.capClip)
       buzzer.style.setProperty('--cap-w', style.capW)
@@ -307,6 +308,8 @@ function startGame(app, roomCode, nick) {
     toastBox,
   )
   applyBuzzerStyle(prefs.buttonStyle)
+  // WebP 非対応ブラウザの判定が済んだら正しい形式で当て直す
+  spriteFormatReady.then(() => applyBuzzerStyle(prefs.buttonStyle))
 
   showOverlay('接続しています…', `ルームコード: ${roomCode}`, [
     el('button', { class: 'btn', text: 'キャンセル', onclick: goTop }),

@@ -1,12 +1,16 @@
-import mascotHero from '../assets/mascot/hero.webp'
 import { el } from '../util/dom.js'
 import { mountHost } from './host.js'
 import { mountPlayer } from './player.js'
+import { mascotSprite, spriteFormatReady } from './sprites.js'
 
 export function mountTop(app) {
+  const hero = el('img', { class: 'mascot-hero', alt: '' })
+  spriteFormatReady.then(() => {
+    hero.src = mascotSprite('hero')
+  })
   app.replaceChildren(
     el('div', { class: 'screen top-screen' }, [
-      el('img', { class: 'mascot-hero', src: mascotHero, alt: '' }),
+      hero,
       el('h1', { class: 'logo', text: 'Hayabuzz' }),
       el('p', { class: 'tagline', text: 'スマホが早押しボタンになるクイズアプリ' }),
       el('button', {

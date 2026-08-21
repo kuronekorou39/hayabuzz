@@ -8,14 +8,12 @@ import { chromium } from 'playwright'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = resolve(root, 'assets-src', 'mascot-quiz-hayato.png')
-const OUT_DIR = resolve(root, 'src/assets/mascot')
+// WebP 非対応の旧ブラウザ向けに PNG も併備するため public/ に両形式で出力する
+const OUT_DIR = resolve(root, 'public/mascot')
 const PUBLIC_DIR = resolve(root, 'public')
 
-// 3x3 グリッドの (行, 列) → 用途
+// 3x3 グリッドの (行, 列) → 用途（現在使っているのはトップ画面のヒーローのみ）
 const CELLS = [
-  { row: 0, col: 1, name: 'flying', out: 320 }, // 飛んでいる → 接続中
-  { row: 1, col: 0, name: 'correct', out: 320 }, // 正解!（トロフィー） → 正解バナー
-  { row: 2, col: 1, name: 'wrong', out: 320 }, // ??（困り顔） → 不正解/エラー
   { row: 2, col: 0, name: 'hero', out: 480 }, // ボタンを持つ → トップ画面
 ]
 const ICON_CELL = { row: 2, col: 2 } // 本を読む（メガネ） → アイコン
@@ -126,10 +124,12 @@ try {
   await mkdir(PUBLIC_DIR, { recursive: true })
 
   for (const spec of CELLS) {
-    const dataUrl = await crop(cells[spec.row][spec.col], spec.out, 'image/webp')
-    const buf = Buffer.from(dataUrl.split(',')[1], 'base64')
-    await writeFile(resolve(OUT_DIR, `${spec.name}.webp`), buf)
-    console.log(`${spec.name}.webp (${(buf.length / 1024).toFixed(0)} KB)`)
+    for (const [ext, mime] of [['webp', 'image/webp'], ['jpg', 'image/jpeg']]) {
+      const dataUrl = await crop(cells[spec.row][spec.col], spec.out, mime)
+      const buf = Buffer.from(dataUrl.split(',')[1], 'base64')
+      await writeFile(resolve(OUT_DIR, `${spec.name}.${ext}`), buf)
+      console.log(`${spec.name}.${ext} (${(buf.length / 1024).toFixed(0)} KB)`)
+    }
   }
 
   const iconCell = cells[ICON_CELL.row][ICON_CELL.col]

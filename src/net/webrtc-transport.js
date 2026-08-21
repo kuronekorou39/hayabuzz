@@ -73,6 +73,7 @@ export function createWebrtcTransport({ role }) {
   }
 
   let sawMdnsCandidates = null // 直近の自分の候補に mDNS(.local) が含まれたか（null=未収集）
+  let sawHostCandidates = null // 直近の自分の候補に host 候補が含まれたか（null=未収集）
 
   // 収集できた ICE 候補の種別を診断ログに残す（mDNS 混入や TURN の生死が分かる）
   function logCandidates(pc, label) {
@@ -81,6 +82,7 @@ export function createWebrtcTransport({ role }) {
     const count = (type) => lines.filter((line) => line.includes(`typ ${type}`)).length
     const mdns = lines.filter((line) => line.includes('.local')).length
     sawMdnsCandidates = mdns > 0
+    sawHostCandidates = count('host') > 0
     diagLog('候補', `${label} host=${count('host')}(mDNS ${mdns}) srflx=${count('srflx')} relay=${count('relay')}`)
   }
 
@@ -276,6 +278,8 @@ export function createWebrtcTransport({ role }) {
     enableLegacyCompat,
     // 互換モードが意味を持つか（自分の候補が mDNS で隠されているか）。null=未収集
     usesMdnsCandidates: () => sawMdnsCandidates,
+    // LAN 内の host 候補を出せているか。旧 Safari はマイク許可なしでは false になる
+    hasHostCandidates: () => sawHostCandidates,
 
     async join(roomId) {
       active = true

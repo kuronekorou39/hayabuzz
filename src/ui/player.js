@@ -717,19 +717,51 @@ function startGame(app, roomCode, nick) {
     }
   })
 
+  // 旧 Safari（iOS 12 等）はマイク許可がないと LAN 内の接続候補（host 候補）を
+  // 出さないため、同一 Wi-Fi でも直結できない。許可を取って接続をやり直す
+  async function retryWithCompat() {
+    showOverlay('接続しています…', `ルームコード: ${roomCode}`, [
+      el('button', { class: 'btn', text: 'キャンセル', onclick: goTop }),
+    ], { withSpinner: true })
+    setStatus('wait', '接続中')
+    try {
+      await transport.enableLegacyCompat()
+    } catch {
+      // 拒否された場合はタイムアウト後に診断つきで再表示される
+    }
+    startJoinTimer()
+  }
+
   // 対称NAT等で確立できない場合に無限にスピナーを回さない
-  joinTimer = setTimeout(() => {
-    if (hostPeerId !== null) return
-    setStatus('off', '未接続')
-    const message =
-      peersSeen === 0
-        ? 'この回線では P2P 接続を確立できない可能性があります（対称NAT等）。別の回線（モバイル回線など）でお試しください。'
-        : 'ホストが見つかりませんでした。ルームコードが正しいか、出題者の画面が開いているか確認してください。'
-    showOverlay('接続できませんでした', message, [
-      el('button', { class: 'btn btn-primary', text: '再試行', onclick: () => location.reload() }),
-      el('button', { class: 'btn', text: 'トップへ戻る', onclick: goTop }),
-    ], { withDiag: true })
-  }, CONFIG.joinTimeoutMs)
+  function startJoinTimer() {
+    clearTimeout(joinTimer)
+    joinTimer = setTimeout(() => {
+      if (hostPeerId !== null) return
+      setStatus('off', '未接続')
+      const buttons = []
+      let message
+      if (peersSeen === 0 && transport.hasHostCandidates() === false) {
+        // シグナリング以前に候補が出せていない旧端末の典型パターン
+        message =
+          'お使いの端末（古い Safari 等）ではマイク使用を一度許可すると接続できる場合があります。音声は使いません。'
+        buttons.push(el('button', { class: 'btn btn-primary', text: 'マイク許可で再試行', onclick: retryWithCompat }))
+      } else if (transport.hasHostCandidates() === false) {
+        message =
+          '接続情報の交換はできていますが、直結を確立できませんでした。お使いの端末（古い Safari 等）ではマイク使用を一度許可すると接続できる場合があります。音声は使いません。'
+        buttons.push(el('button', { class: 'btn btn-primary', text: 'マイク許可で再試行', onclick: retryWithCompat }))
+      } else if (peersSeen === 0) {
+        message =
+          'この回線では P2P 接続を確立できない可能性があります（対称NAT等）。別の回線（モバイル回線など）でお試しください。'
+      } else {
+        message =
+          'ホストが見つかりませんでした。ルームコードが正しいか、出題者の画面が開いているか確認してください。'
+      }
+      buttons.push(el('button', { class: 'btn', text: '再試行', onclick: () => location.reload() }))
+      buttons.push(el('button', { class: 'btn', text: 'トップへ戻る', onclick: goTop }))
+      showOverlay('接続できませんでした', message, buttons, { withDiag: true })
+    }, CONFIG.joinTimeoutMs)
+  }
+  startJoinTimer()
 
   window.addEventListener('pagehide', () => transport.leave())
   transport.join(roomCode).catch(() => {}) // 失敗内容は診断ログに記録済み

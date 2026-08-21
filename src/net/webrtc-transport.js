@@ -72,6 +72,15 @@ export function createWebrtcTransport({ role }) {
     return new RTCPeerConnection({ iceServers: CONFIG.iceServers })
   }
 
+  // 収集できた ICE 候補の種別を診断ログに残す（mDNS 混入や TURN の生死が分かる）
+  function logCandidates(pc, label) {
+    const sdp = pc.localDescription !== null ? pc.localDescription.sdp : ''
+    const lines = sdp.split('\n').filter((line) => line.startsWith('a=candidate'))
+    const count = (type) => lines.filter((line) => line.includes(`typ ${type}`)).length
+    const mdns = lines.filter((line) => line.includes('.local')).length
+    diagLog('候補', `${label} host=${count('host')}(mDNS ${mdns}) srflx=${count('srflx')} relay=${count('relay')}`)
+  }
+
   // 相手が確定した接続にイベントを配線する。
   // conn オブジェクトはここで1つだけ作る（open 済みで届いた場合と open イベントの
   // 両方から registerPeer が呼ばれても、同一接続と判定できるようにするため）
@@ -156,6 +165,7 @@ export function createWebrtcTransport({ role }) {
       const offerId = randomCode(20)
       await pc.setLocalDescription(await pc.createOffer())
       await waitIceGathering(pc)
+      logCandidates(pc, 'offer')
       offerPool.set(offerId, { pc, channel, sdp: pc.localDescription.sdp, createdAt: Date.now() })
     } catch (err) {
       diagLog('offer作成エラー', err.message)
@@ -213,6 +223,7 @@ export function createWebrtcTransport({ role }) {
       await pc.setRemoteDescription(toSessionDescription(offerDesc))
       await pc.setLocalDescription(await pc.createAnswer())
       await waitIceGathering(pc)
+      logCandidates(pc, 'answer')
       respond(pc.localDescription)
     } catch (err) {
       diagLog('offer処理エラー', err.message)
@@ -238,8 +249,22 @@ export function createWebrtcTransport({ role }) {
     signal?.requestAnnounce() // プールを補充して次の参加に備える
   }
 
+  // 旧端末互換モード: マイク使用許可を一度取ると Chrome 等が ICE 候補に
+  // 実 IP を含めるようになり（mDNS の .local 名を解決できない iOS 12 等の
+  // 旧 WebRTC でも）同一 LAN で直結できるようになる。音声は一切使わない
+  async function enableLegacyCompat() {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    for (const track of stream.getTracks()) track.stop()
+    diagLog('互換モード', 'マイク許可OK（実IP候補が有効）')
+    // 既存の待ち受け offer は mDNS 候補のままなので作り直す
+    for (const entry of offerPool.values()) entry.pc.close()
+    offerPool.clear()
+    signal?.requestAnnounce()
+  }
+
   return {
     selfId,
+    enableLegacyCompat,
 
     async join(roomId) {
       active = true

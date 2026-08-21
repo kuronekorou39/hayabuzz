@@ -18,6 +18,7 @@ import {
   setExportedAt,
 } from '../game/question-bank.js'
 import { teamMeta, teamTotals } from '../game/teams.js'
+import { diagText } from '../net/diag.js'
 import { validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
@@ -246,6 +247,29 @@ export function mountHost(app) {
   const nickResumeCheck = el('input', { type: 'checkbox' })
   nickResumeCheck.addEventListener('change', () => game.setNickResume(nickResumeCheck.checked))
 
+  // 旧端末互換モード（iOS 12 等）: マイク許可で接続候補に実IPを含め、同一Wi-Fiで直結できるようにする
+  const legacyCompatBtn = el('button', { class: 'btn btn-small', text: '有効にする', onclick: async () => {
+    legacyCompatBtn.disabled = true
+    try {
+      await transport.enableLegacyCompat()
+      legacyCompatBtn.textContent = '有効'
+    } catch {
+      legacyCompatBtn.textContent = '許可されませんでした'
+      legacyCompatBtn.disabled = false
+    }
+  } })
+
+  // 接続診断（出題者側）
+  const hostDiagText = el('div', { class: 'diag-log' })
+  const hostDiagOverlay = el('div', { class: 'overlay diag-overlay hidden' }, [
+    el('div', { class: 'card rules-card' }, [el('h2', { text: '接続診断' }), hostDiagText]),
+    el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => hostDiagOverlay.classList.add('hidden') }),
+  ])
+  const hostDiagBtn = el('button', { class: 'btn btn-small', text: '接続診断を表示', onclick: () => {
+    hostDiagText.textContent = diagText(40)
+    hostDiagOverlay.classList.remove('hidden')
+  } })
+
   const teamsSelect = el('select', { class: 'input' }, [
     el('option', { value: '0', text: 'なし（個人戦）' }),
     el('option', { value: '2', text: '2チーム' }),
@@ -284,6 +308,11 @@ export function mountHost(app) {
         el('span', { text: '同名での復帰（得点引き継ぎ）' }),
         nickResumeCheck,
       ]),
+      el('div', { class: 'settings-row' }, [
+        el('span', { text: '旧端末互換（iOS 12等・マイク許可を使用）' }),
+        legacyCompatBtn,
+      ]),
+      el('div', { class: 'settings-row' }, [el('span', { text: 'つながらない時に' }), hostDiagBtn]),
       el('h2', { text: 'ハンデ（押下時刻に加算するms）' }),
       handicapPlaceholder,
       handicapRows,
@@ -468,6 +497,7 @@ export function mountHost(app) {
         el('button', { class: 'btn btn-primary btn-big', text: 'クイズを開始', onclick: showGame }),
       ]),
       rulesOverlay,
+      hostDiagOverlay,
     )
   }
 
@@ -498,6 +528,7 @@ export function mountHost(app) {
       shareOverlay,
       rulesOverlay,
       bankOverlay,
+      hostDiagOverlay,
     )
   }
 

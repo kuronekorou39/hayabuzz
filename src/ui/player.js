@@ -4,6 +4,7 @@ import { MASS_PHASE_LABEL, PHASE, PHASE_LABEL } from '../game/phases.js'
 import { MSG, PROTO_VERSION, validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
 import { teamMeta, teamTotals } from '../game/teams.js'
+import { diagText } from '../net/diag.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
 import { el } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
@@ -233,9 +234,21 @@ function startGame(app, roomCode, nick) {
     setSoundEnabled(prefs.sound)
   })
 
+  // 接続診断（設定からいつでも見られる）
+  const diagViewText = el('div', { class: 'diag-log' })
+  const diagOverlay = el('div', { class: 'overlay diag-overlay hidden' }, [
+    el('div', { class: 'card rules-card' }, [el('h2', { text: '接続診断' }), diagViewText]),
+    el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => diagOverlay.classList.add('hidden') }),
+  ])
+  const diagBtn = el('button', { class: 'btn btn-small', text: '接続診断を表示', onclick: () => {
+    diagViewText.textContent = diagText(40)
+    diagOverlay.classList.remove('hidden')
+  } })
+
   const settingsCard = el('div', { class: 'card settings-card hidden' }, [
     el('label', { class: 'settings-row' }, [el('span', { text: 'ボタンの見た目' }), styleSelect]),
     el('label', { class: 'settings-row' }, [el('span', { text: '効果音' }), soundCheck]),
+    el('div', { class: 'settings-row' }, [el('span', { text: 'つながらない時に' }), diagBtn]),
   ])
   const settingsBtn = el('button', {
     class: 'btn btn-small',
@@ -246,13 +259,22 @@ function startGame(app, roomCode, nick) {
   // --- 接続オーバーレイ（接続中/エラー/部屋終了の全画面表示） ---
   const overlayTitle = el('h2', { text: '' })
   const overlayMessage = el('p', { text: '' })
+  const overlayDiag = el('div', { class: 'diag-log hidden' })
   const overlayButtons = el('div', { class: 'btn-row' })
   const spinner = el('div', { class: 'spinner' })
-  const overlay = el('div', { class: 'overlay conn-overlay' }, [spinner, overlayTitle, overlayMessage, overlayButtons])
+  const overlay = el('div', { class: 'overlay conn-overlay' }, [
+    spinner,
+    overlayTitle,
+    overlayMessage,
+    overlayDiag,
+    overlayButtons,
+  ])
 
-  function showOverlay(title, message, buttons, { withSpinner = false } = {}) {
+  function showOverlay(title, message, buttons, { withSpinner = false, withDiag = false } = {}) {
     overlayTitle.textContent = title
     overlayMessage.textContent = message
+    overlayDiag.textContent = withDiag ? `診断情報:\n${diagText()}` : ''
+    overlayDiag.classList.toggle('hidden', !withDiag)
     overlayButtons.replaceChildren(...buttons)
     spinner.classList.toggle('hidden', !withSpinner)
     overlay.classList.remove('hidden')
@@ -281,6 +303,7 @@ function startGame(app, roomCode, nick) {
     overlay,
     boardOverlay,
     finalOverlay,
+    diagOverlay,
     toastBox,
   )
   applyBuzzerStyle(prefs.buttonStyle)
@@ -650,7 +673,7 @@ function startGame(app, roomCode, nick) {
     setStatus('off', '切断')
     showOverlay('部屋が終了しました', '出題者との接続が切れました。ホストなしでは続行できません。', [
       el('button', { class: 'btn btn-primary', text: 'トップへ戻る', onclick: goTop }),
-    ])
+    ], { withDiag: true })
   }
 
   transport.onPeerJoin((peerId) => {
@@ -705,9 +728,9 @@ function startGame(app, roomCode, nick) {
     showOverlay('接続できませんでした', message, [
       el('button', { class: 'btn btn-primary', text: '再試行', onclick: () => location.reload() }),
       el('button', { class: 'btn', text: 'トップへ戻る', onclick: goTop }),
-    ])
+    ], { withDiag: true })
   }, CONFIG.joinTimeoutMs)
 
   window.addEventListener('pagehide', () => transport.leave())
-  transport.join(roomCode)
+  transport.join(roomCode).catch(() => {}) // 失敗内容は診断ログに記録済み
 }

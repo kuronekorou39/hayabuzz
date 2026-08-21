@@ -988,6 +988,29 @@ textarea.input {
   background: rgba(255, 107, 107, 0.12);
 }
 
+/* 接続診断ログ */
+.diag-log {
+  text-align: left;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.68rem;
+  line-height: 1.7;
+  color: var(--dim);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 34vh;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 40ch;
+}
+
+.diag-log.hidden {
+  display: none;
+}
+
 /* 結果発表 */
 .final-rank {
   width: 3.2em;

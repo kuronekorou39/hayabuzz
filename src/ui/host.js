@@ -713,5 +713,5 @@ export function mountHost(app) {
 
   showLobby()
   render()
-  transport.join(roomCode)
+  transport.join(roomCode).catch(() => {}) // 失敗内容は診断ログに記録済み
 }

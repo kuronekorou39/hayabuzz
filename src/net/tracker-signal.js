@@ -1,4 +1,5 @@
 import { CONFIG } from '../config.js'
+import { diagLog } from './diag.js'
 
 // WebTorrent トラッカーの WebSocket プロトコルを話すシグナリングクライアント。
 //
@@ -60,15 +61,18 @@ export class TrackerSignal {
 
   #connect(url) {
     if (!this.active) return
+    const shortHost = url.replace('wss://', '').split('/')[0]
     let socket
     try {
       socket = new WebSocket(url)
-    } catch {
+    } catch (err) {
+      diagLog('トラッカー接続不可', `${shortHost} ${err.message}`)
       this.#scheduleReconnect(url)
       return
     }
     this.sockets.set(url, socket)
     socket.onopen = () => {
+      diagLog('トラッカー接続', shortHost)
       this.retryDelays.delete(url)
       this.#announce(url)
       const timer = setInterval(() => this.#announce(url), CONFIG.signaling.announceIntervalMs)
@@ -76,6 +80,7 @@ export class TrackerSignal {
     }
     socket.onmessage = (ev) => this.#handleMessage(url, ev.data)
     socket.onclose = () => {
+      diagLog('トラッカー切断', shortHost)
       const timer = this.timers.get(url)
       if (timer !== undefined) clearInterval(timer)
       this.timers.delete(url)
@@ -127,6 +132,10 @@ export class TrackerSignal {
       return
     }
     if (typeof data !== 'object' || data === null) return
+    if (typeof data['failure reason'] === 'string') {
+      diagLog('トラッカー拒否', data['failure reason'])
+      return
+    }
     if (data.info_hash !== undefined && data.info_hash !== this.infoHash) return
     if (data.peer_id === this.peerId) return // 自分の announce の跳ね返り
 
@@ -147,8 +156,10 @@ export class TrackerSignal {
     }
 
     if (hasOffer) {
+      diagLog('offer受信', data.peer_id.slice(0, 4))
       // answer は offer が届いたのと同じトラッカー経由で返す
       const respond = (answerDesc) => {
+        diagLog('answer送信', data.peer_id.slice(0, 4))
         this.#send(url, {
           to_peer_id: data.peer_id,
           offer_id: data.offer_id,
@@ -157,6 +168,7 @@ export class TrackerSignal {
       }
       this.onRemoteOffer(data.offer, data.peer_id, respond)
     } else {
+      diagLog('answer受信', data.peer_id.slice(0, 4))
       this.onRemoteAnswer(data.offer_id, data.answer, data.peer_id)
     }
   }

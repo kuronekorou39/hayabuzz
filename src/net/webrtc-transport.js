@@ -1,5 +1,6 @@
 import { CONFIG } from '../config.js'
 import { randomCode } from '../util/random.js'
+import { diagLog } from './diag.js'
 import { TrackerSignal } from './tracker-signal.js'
 
 // transport.js のインターフェースの自前実装。
@@ -16,6 +17,12 @@ import { TrackerSignal } from './tracker-signal.js'
 
 const ROLE_PREFIX = { host: 'HBH-', player: 'HBP-' }
 const PENDING_ANSWER_TTL_MS = 30000
+
+// 旧 WebKit（iOS 12 等）は setRemoteDescription に RTCSessionDescription の
+// インスタンスを要求するため、素のオブジェクトを包んで渡す
+function toSessionDescription(desc) {
+  return typeof RTCSessionDescription === 'function' ? new RTCSessionDescription(desc) : desc
+}
 
 async function sha1Hex(text) {
   const digest = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(text))
@@ -103,6 +110,7 @@ export function createWebrtcTransport({ role }) {
       for (const handler of messageHandlers) handler(msg, remoteId)
     })
     pc.addEventListener('iceconnectionstatechange', () => {
+      diagLog('ICE', `${remoteId.slice(0, 4)} ${pc.iceConnectionState}`)
       if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') {
         unregisterPeer(remoteId, channel)
       }
@@ -127,6 +135,7 @@ export function createWebrtcTransport({ role }) {
       return // onPeerJoin は既に発火済み
     }
     peers.set(remoteId, conn)
+    diagLog('ピア接続', remoteId.slice(0, 4))
     for (const handler of joinHandlers) handler(remoteId)
   }
 
@@ -141,12 +150,17 @@ export function createWebrtcTransport({ role }) {
   // --- offer プール（announce に載せる接続待ち受け枠） ---
 
   async function createPoolOffer() {
-    const pc = newPeerConnection()
-    const channel = pc.createDataChannel('data')
-    const offerId = randomCode(20)
-    await pc.setLocalDescription(await pc.createOffer())
-    await waitIceGathering(pc)
-    offerPool.set(offerId, { pc, channel, sdp: pc.localDescription.sdp, createdAt: Date.now() })
+    try {
+      const pc = newPeerConnection()
+      const channel = pc.createDataChannel('data')
+      const offerId = randomCode(20)
+      await pc.setLocalDescription(await pc.createOffer())
+      await waitIceGathering(pc)
+      offerPool.set(offerId, { pc, channel, sdp: pc.localDescription.sdp, createdAt: Date.now() })
+    } catch (err) {
+      diagLog('offer作成エラー', err.message)
+      throw err
+    }
   }
 
   async function getOffers() {
@@ -196,11 +210,12 @@ export function createWebrtcTransport({ role }) {
       wireConnection(pc, ev.channel, fromPeerId, fromPeerId) // open 済みで届くケースも wireConnection 内で処理される
     })
     try {
-      await pc.setRemoteDescription(offerDesc)
+      await pc.setRemoteDescription(toSessionDescription(offerDesc))
       await pc.setLocalDescription(await pc.createAnswer())
       await waitIceGathering(pc)
       respond(pc.localDescription)
-    } catch {
+    } catch (err) {
+      diagLog('offer処理エラー', err.message)
       pendingAnswers.delete(pending)
       pc.close()
     }
@@ -214,8 +229,9 @@ export function createWebrtcTransport({ role }) {
     offerPool.delete(offerId) // この offer は消費された
     wireConnection(entry.pc, entry.channel, fromPeerId, selfId)
     try {
-      await entry.pc.setRemoteDescription(answerDesc)
-    } catch {
+      await entry.pc.setRemoteDescription(toSessionDescription(answerDesc))
+    } catch (err) {
+      diagLog('answer適用エラー', err.message)
       entry.pc.close()
       return
     }
@@ -227,16 +243,22 @@ export function createWebrtcTransport({ role }) {
 
     async join(roomId) {
       active = true
-      // 部屋のトピックをハッシュ化してトラッカーの info_hash（20文字）にする
-      const infoHash = (await sha1Hex(`${CONFIG.appId}/${roomId}`)).slice(0, 20)
-      signal = new TrackerSignal({
-        urls: CONFIG.signaling.trackerUrls,
-        infoHash,
-        peerId: selfId,
-        onRemoteOffer: handleRemoteOffer,
-        onRemoteAnswer: handleRemoteAnswer,
-      })
-      signal.start(getOffers)
+      try {
+        diagLog('参加開始', `role=${role}`)
+        // 部屋のトピックをハッシュ化してトラッカーの info_hash（20文字）にする
+        const infoHash = (await sha1Hex(`${CONFIG.appId}/${roomId}`)).slice(0, 20)
+        signal = new TrackerSignal({
+          urls: CONFIG.signaling.trackerUrls,
+          infoHash,
+          peerId: selfId,
+          onRemoteOffer: handleRemoteOffer,
+          onRemoteAnswer: handleRemoteAnswer,
+        })
+        signal.start(getOffers)
+      } catch (err) {
+        diagLog('参加処理エラー', err.message)
+        throw err
+      }
     },
 
     leave() {

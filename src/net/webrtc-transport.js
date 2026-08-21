@@ -258,6 +258,11 @@ export function createWebrtcTransport({ role }) {
   // 実 IP を含めるようになり（mDNS の .local 名を解決できない iOS 12 等の
   // 旧 WebRTC でも）同一 LAN で直結できるようになる。音声は一切使わない
   async function enableLegacyCompat() {
+    if (typeof navigator.mediaDevices?.getUserMedia !== 'function') {
+      // プライベートブラウズや iOS 設定でメディア API 自体が無効な状態
+      diagLog('互換モード失敗', 'mediaDevices API が無効（プライベートモード/設定の可能性）')
+      throw new Error('mediaDevices unavailable')
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       for (const track of stream.getTracks()) track.stop()

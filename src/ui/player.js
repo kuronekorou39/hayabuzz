@@ -740,15 +740,16 @@ function startGame(app, roomCode, nick) {
       setStatus('off', '未接続')
       const buttons = []
       let message
-      if (peersSeen === 0 && transport.hasHostCandidates() === false) {
-        // シグナリング以前に候補が出せていない旧端末の典型パターン
+      const compatAvailable = typeof navigator.mediaDevices?.getUserMedia === 'function'
+      if (transport.hasHostCandidates() === false && compatAvailable) {
+        // 旧 Safari はマイク許可がないと LAN 内の接続候補を出さない
         message =
           'お使いの端末（古い Safari 等）ではマイク使用を一度許可すると接続できる場合があります。音声は使いません。'
         buttons.push(el('button', { class: 'btn btn-primary', text: 'マイク許可で再試行', onclick: retryWithCompat }))
       } else if (transport.hasHostCandidates() === false) {
+        // メディア API 自体が無効でマイク許可の手が使えない状態
         message =
-          '接続情報の交換はできていますが、直結を確立できませんでした。お使いの端末（古い Safari 等）ではマイク使用を一度許可すると接続できる場合があります。音声は使いません。'
-        buttons.push(el('button', { class: 'btn btn-primary', text: 'マイク許可で再試行', onclick: retryWithCompat }))
+          'この端末ではマイクAPIが無効のため接続候補を増やせません。プライベートブラウズをオフにし、iOSの「設定 → Safari → カメラとマイクのアクセス」を許可してから、通常のタブで開き直してください。'
       } else if (peersSeen === 0) {
         message =
           'この回線では P2P 接続を確立できない可能性があります（対称NAT等）。別の回線（モバイル回線など）でお試しください。'

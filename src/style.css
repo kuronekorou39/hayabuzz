@@ -880,6 +880,68 @@ textarea.input {
   min-width: 0;
 }
 
+/* 問題セット */
+.bank-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+.bank-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bank-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bank-q {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bank-meta {
+  color: var(--dim);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bank-add {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.bank-file-input {
+  display: none;
+}
+
+/* 答え・メモの手元表示（出題者のみ） */
+.answer-note {
+  margin: 0;
+  color: var(--warn);
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.answer-note.hidden {
+  display: none;
+}
+
 .spinner {
   width: 34px;
   height: 34px;

@@ -33,7 +33,7 @@ export async function pressBuzzer(page) {
 
 // 問題を出して早押し受付を開始する
 export async function askAndArm(host, questionText) {
-  await host.page.locator('textarea').fill(questionText)
+  await host.page.locator('.question-input').fill(questionText)
   await host.page.getByRole('button', { name: '問題を表示' }).click()
   // welcome 直後の ping バースト（8回×150ms）でクロックオフセット推定が済むのを待つ
   await host.page.waitForTimeout(2500)

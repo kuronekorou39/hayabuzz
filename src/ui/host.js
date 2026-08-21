@@ -3,6 +3,20 @@ import { playCorrect, playLock, playWrong, setSoundEnabled, unlockAudio } from '
 import { CONFIG } from '../config.js'
 import { HostGame } from '../game/host-game.js'
 import { PHASE, PHASE_LABEL } from '../game/phases.js'
+import {
+  addQuestion,
+  exportPayload,
+  getExportedAt,
+  importTsv,
+  loadBank,
+  markAsked,
+  nextUnasked,
+  parseImport,
+  recordWinner,
+  removeQuestion,
+  saveBank,
+  setExportedAt,
+} from '../game/question-bank.js'
 import { teamMeta, teamTotals } from '../game/teams.js'
 import { validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
@@ -14,6 +28,12 @@ export function mountHost(app) {
   unlockAudio() // トップ画面のクリック（ユーザー操作）を起点に AudioContext を有効化
   const prefs = loadPrefs()
   setSoundEnabled(prefs.sound)
+  // 問題セット等のブラウザ保存が自動削除されにくいよう永続化を要求（対応ブラウザのみ）
+  navigator.storage?.persist?.().catch(() => {})
+
+  const bankItems = loadBank()
+  let currentBankId = null // いま出題中のセット問題（答え・メモの手元表示と履歴記録に使う）
+  let outcomeRecorded = false
 
   const roomCode = randomCode(CONFIG.roomCodeLen)
   const joinUrl = `${location.origin}${location.pathname}${location.search}#/join/${roomCode}`
@@ -103,24 +123,45 @@ export function mountHost(app) {
     placeholder: '問題文（空のまま口頭で読み上げてもOK）',
   })
   const showBtn = el('button', { class: 'btn btn-primary', text: '問題を表示', onclick: () => {
+    currentBankId = null // 手入力の出題はセットと紐付けない
     game.showQuestion(questionInput.value)
     questionInput.value = ''
+  } })
+  const askNextBtn = el('button', { class: 'btn', text: 'セットから次を出題', onclick: () => {
+    const item = nextUnasked(bankItems)
+    if (item === null) return
+    askFromBank(item)
   } })
   const armBtn = el('button', { class: 'btn btn-arm', text: '早押し開始', onclick: () => game.arm() })
   const stopBtn = el('button', { class: 'btn', text: '受付停止', onclick: () => game.stop() })
 
   const phaseEl = el('span', { class: 'phase-chip', text: PHASE_LABEL[PHASE.WAITING] })
   const currentQuestionEl = el('div', { class: 'question-text question-clamp', text: 'まだ問題がありません' })
+  const answerLine = el('p', { class: 'answer-note hidden', text: '' }) // 答え・メモ（出題者の手元のみ）
   const orderList = el('ol', { class: 'order-list' })
   const orderPlaceholder = el('p', { class: 'placeholder', text: 'まだ誰も押していません' })
   const resultLine = el('p', { class: 'result-line hidden', text: '' })
+  // セット問題の判定結果（出題日時と正解者名）を履歴に書き込む
+  function recordOutcome() {
+    if (outcomeRecorded || currentBankId === null) return
+    if (game.phase !== PHASE.RESULT || game.result === null) return
+    const winner = game.result.correct
+      ? (game.players.get(game.result.playerId)?.nick ?? null)
+      : null
+    recordWinner(bankItems, currentBankId, winner)
+    saveBank(bankItems)
+    outcomeRecorded = true
+  }
+
   const correctBtn = el('button', { class: 'btn btn-ok', text: '正解', onclick: () => {
     playCorrect()
     game.judgeCorrect()
+    recordOutcome()
   } })
   const wrongNextBtn = el('button', { class: 'btn btn-ng', text: '不正解→次点へ', onclick: () => {
     playWrong()
     game.judgeWrongNext()
+    recordOutcome() // 次点がおらず正解者なしで決着した場合の記録
   } })
   const wrongOpenBtn = el('button', { class: 'btn btn-ng', text: '不正解→全員再開放', onclick: () => {
     playWrong()
@@ -249,6 +290,138 @@ export function mountHost(app) {
 
   const rulesBtn = el('button', { class: 'btn btn-small', text: 'ルール', onclick: openRules })
 
+  // --- 問題セット（出題者の端末にのみ保存。正本はエクスポートしたファイル） ---
+  function askFromBank(item) {
+    if (game.phase === PHASE.ARMED || game.phase === PHASE.LOCKED) return // 進行中の問題を壊さない
+    currentBankId = item.id
+    outcomeRecorded = false
+    markAsked(bankItems, item.id, Date.now())
+    saveBank(bankItems)
+    questionInput.value = ''
+    game.showQuestion(item.q)
+    bankOverlay.classList.add('hidden')
+  }
+
+  const bankQInput = el('input', { class: 'input bank-q-input', type: 'text', placeholder: '問題文', maxlength: CONFIG.questionMaxLen })
+  const bankAInput = el('input', { class: 'input bank-a-input', type: 'text', placeholder: '答え', maxlength: 200 })
+  const bankMemoInput = el('input', { class: 'input bank-memo-input', type: 'text', placeholder: 'メモ（判定基準など）', maxlength: 500 })
+  const bankAddBtn = el('button', { class: 'btn btn-primary btn-small', text: '追加', onclick: () => {
+    const item = addQuestion(bankItems, {
+      q: bankQInput.value,
+      a: bankAInput.value,
+      memo: bankMemoInput.value,
+    })
+    if (item === null) return
+    saveBank(bankItems)
+    bankQInput.value = ''
+    bankAInput.value = ''
+    bankMemoInput.value = ''
+    renderBank()
+    bankQInput.focus()
+  } })
+
+  const bankRows = el('div', { class: 'bank-rows' })
+  const bankPlaceholder = el('p', { class: 'placeholder', text: 'まだ問題がありません。下で追加するか、貼り付け取り込みが使えます。' })
+
+  const bankPaste = el('textarea', {
+    class: 'input bank-paste',
+    rows: '3',
+    placeholder: '貼り付け取り込み: 1行1問「問題 (タブ) 答え (タブ) メモ」。表計算からのコピペでOK',
+  })
+  const bankImportBtn = el('button', { class: 'btn btn-small', text: '取り込み', onclick: () => {
+    const count = importTsv(bankItems, bankPaste.value)
+    if (count > 0) {
+      saveBank(bankItems)
+      bankPaste.value = ''
+      renderBank()
+    }
+  } })
+
+  const exportNote = el('p', { class: 'placeholder', text: '' })
+  const exportBtn = el('button', { class: 'btn btn-small', text: 'ファイルへエクスポート', onclick: () => {
+    const blob = new Blob([exportPayload(bankItems)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = el('a', { href: url, download: `hayabuzz-questions-${new Date().toISOString().slice(0, 10)}.json` })
+    link.click()
+    URL.revokeObjectURL(url)
+    setExportedAt(Date.now())
+    renderBank()
+  } })
+  const importFileInput = el('input', { class: 'bank-file-input', type: 'file', accept: 'application/json' })
+  importFileInput.addEventListener('change', () => {
+    const file = importFileInput.files[0]
+    importFileInput.value = ''
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const questions = parseImport(String(reader.result))
+      if (questions === null) {
+        exportNote.textContent = '読み込めませんでした（エクスポートしたファイルを指定してください）'
+        return
+      }
+      bankItems.length = 0
+      bankItems.push(...questions)
+      saveBank(bankItems)
+      renderBank()
+    }
+    reader.readAsText(file)
+  })
+  const importLabel = el('label', { class: 'btn btn-small' }, [
+    el('span', { text: 'ファイルから復元' }),
+    importFileInput,
+  ])
+
+  function formatAskedMeta(item) {
+    if (item.history.length === 0) return '未出題'
+    const last = item.history[item.history.length - 1]
+    const date = new Date(last.at)
+    const when = `${date.getMonth() + 1}/${date.getDate()}`
+    const winner = last.winner !== null ? ` ${last.winner}` : ' 正解者なし'
+    return `${item.history.length}回 · ${when}${winner}`
+  }
+
+  function renderBank() {
+    bankPlaceholder.style.display = bankItems.length === 0 ? '' : 'none'
+    bankRows.replaceChildren(
+      ...bankItems.map((item) =>
+        el('div', { class: 'bank-row' }, [
+          el('div', { class: 'bank-main' }, [
+            el('span', { class: 'bank-q', text: item.q }),
+            el('span', { class: 'bank-meta', text: `${item.a !== '' ? `答え: ${item.a} · ` : ''}${formatAskedMeta(item)}` }),
+          ]),
+          el('button', { class: 'btn btn-mini', text: '出題', onclick: () => askFromBank(item) }),
+          el('button', { class: 'btn btn-mini', text: '削除', onclick: () => {
+            removeQuestion(bankItems, item.id)
+            saveBank(bankItems)
+            renderBank()
+          } }),
+        ]),
+      ),
+    )
+    const exportedAt = getExportedAt()
+    exportNote.textContent =
+      exportedAt !== null
+        ? `最終エクスポート: ${new Date(exportedAt).toLocaleString()}（ブラウザ保存は消えることがあるため、定期的なエクスポートを推奨）`
+        : 'ブラウザ保存は消えることがあります。作ったらエクスポートしてファイルを正本にしてください'
+  }
+
+  const bankOverlay = el('div', { class: 'overlay bank-overlay hidden' }, [
+    el('div', { class: 'card rules-card' }, [
+      el('h2', { text: '問題セット' }),
+      bankPlaceholder,
+      bankRows,
+      el('div', { class: 'bank-add' }, [bankQInput, bankAInput, bankMemoInput, bankAddBtn]),
+      bankPaste,
+      el('div', { class: 'btn-row' }, [bankImportBtn, exportBtn, importLabel]),
+      exportNote,
+    ]),
+    el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => bankOverlay.classList.add('hidden') }),
+  ])
+  const bankBtn = el('button', { class: 'btn btn-small', text: 'セット', onclick: () => {
+    renderBank()
+    bankOverlay.classList.remove('hidden')
+  } })
+
   // --- 画面: ロビー（参加者集め） → 進行 ---
 
   function showLobby() {
@@ -266,15 +439,16 @@ export function mountHost(app) {
   function showGame() {
     app.replaceChildren(
       el('div', { class: 'screen host-screen' }, [
-        topbar([rulesBtn, shareBtn]),
+        topbar([bankBtn, rulesBtn, shareBtn]),
         el('div', { class: 'card' }, [
           el('h2', { text: '問題' }),
           questionInput,
-          el('div', { class: 'btn-row' }, [showBtn, armBtn, stopBtn]),
+          el('div', { class: 'btn-row' }, [showBtn, askNextBtn, armBtn, stopBtn]),
         ]),
         el('div', { class: 'card' }, [
           el('div', { class: 'topbar' }, [el('h2', { text: '進行' }), phaseEl]),
           currentQuestionEl,
+          answerLine,
           orderPlaceholder,
           orderList,
           resultLine,
@@ -285,6 +459,7 @@ export function mountHost(app) {
       ]),
       shareOverlay,
       rulesOverlay,
+      bankOverlay,
     )
   }
 
@@ -340,6 +515,17 @@ export function mountHost(app) {
     // （仕切り直したいときは「受付停止」で一旦戻す）
     showBtn.textContent = game.phase === PHASE.RESULT ? '次の問題を表示' : '問題を表示'
     showBtn.disabled = game.phase === PHASE.ARMED || game.phase === PHASE.LOCKED
+    askNextBtn.disabled = showBtn.disabled || nextUnasked(bankItems) === null
+
+    // セット問題の答え・メモ（この端末にだけ表示。P2Pには流れない）
+    const bankItem = currentBankId !== null ? bankItems.find((i) => i.id === currentBankId) : undefined
+    if (bankItem !== undefined) {
+      const memo = bankItem.memo !== '' ? ` ／ メモ: ${bankItem.memo}` : ''
+      answerLine.textContent = `答え: ${bankItem.a !== '' ? bankItem.a : '（未記入）'}${memo}`
+      answerLine.className = 'answer-note'
+    } else {
+      answerLine.className = 'answer-note hidden'
+    }
     armBtn.disabled = game.phase !== PHASE.QUESTION
     stopBtn.disabled = game.phase !== PHASE.ARMED && game.phase !== PHASE.LOCKED
     const canJudge = game.phase === PHASE.LOCKED && game.activePlayerId !== null

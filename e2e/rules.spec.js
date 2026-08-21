@@ -14,7 +14,7 @@ test('順次表示ルール: 読み上げが流れ、押下で止まり、正解
   await host.page.locator('.settings-row', { hasText: '読み上げ速度' }).locator('select').selectOption('4')
   await host.page.locator('.rules-overlay').getByRole('button', { name: '閉じる' }).click()
 
-  await host.page.locator('textarea').fill(LONG_QUESTION)
+  await host.page.locator('.question-input').fill(LONG_QUESTION)
   await host.page.getByRole('button', { name: '問題を表示' }).click()
   // 受付開始前は本文がまだ見えない
   await expect(p1.page.locator('.question-text')).toContainText('読み上げられます')

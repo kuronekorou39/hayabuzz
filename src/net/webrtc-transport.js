@@ -72,12 +72,15 @@ export function createWebrtcTransport({ role }) {
     return new RTCPeerConnection({ iceServers: CONFIG.iceServers })
   }
 
+  let sawMdnsCandidates = null // 直近の自分の候補に mDNS(.local) が含まれたか（null=未収集）
+
   // 収集できた ICE 候補の種別を診断ログに残す（mDNS 混入や TURN の生死が分かる）
   function logCandidates(pc, label) {
     const sdp = pc.localDescription !== null ? pc.localDescription.sdp : ''
     const lines = sdp.split('\n').filter((line) => line.startsWith('a=candidate'))
     const count = (type) => lines.filter((line) => line.includes(`typ ${type}`)).length
     const mdns = lines.filter((line) => line.includes('.local')).length
+    sawMdnsCandidates = mdns > 0
     diagLog('候補', `${label} host=${count('host')}(mDNS ${mdns}) srflx=${count('srflx')} relay=${count('relay')}`)
   }
 
@@ -271,6 +274,8 @@ export function createWebrtcTransport({ role }) {
   return {
     selfId,
     enableLegacyCompat,
+    // 互換モードが意味を持つか（自分の候補が mDNS で隠されているか）。null=未収集
+    usesMdnsCandidates: () => sawMdnsCandidates,
 
     async join(roomId) {
       active = true

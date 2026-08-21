@@ -322,6 +322,11 @@ export function mountHost(app) {
   ])
 
   function openRules() {
+    // この端末が既に実IP候補を出している場合、互換モードは不要
+    if (transport.usesMdnsCandidates() === false) {
+      legacyCompatBtn.textContent = '不要（実IPが有効）'
+      legacyCompatBtn.disabled = true
+    }
     answerModeSelect.value = game.rules.answerMode
     revealSelect.value = game.rules.reveal
     revealSpeedSelect.value = String(game.rules.revealCps)

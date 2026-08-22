@@ -22,7 +22,7 @@ import { diagText } from '../net/diag.js'
 import { validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
-import { backdropDismiss, el } from '../util/dom.js'
+import { backdropDismiss, closeX, el, popupOverlay } from '../util/dom.js'
 import { applyBackground, shuffleBackground } from './background.js'
 import { randomCode } from '../util/random.js'
 import { setLeaveGuard } from './leave-guard.js'
@@ -223,10 +223,8 @@ export function mountHost(app) {
   // --- 進行中の共有オーバーレイ ---
   const shareOverlay = el('div', { class: 'overlay share-overlay hidden' })
   const shareBtn = el('button', { class: 'btn btn-small', text: '共有', onclick: () => {
-    shareOverlay.replaceChildren(
-      shareCard,
-      el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => shareOverlay.classList.add('hidden') }),
-    )
+    // shareCard はロビーと共用のため、開くたびにラッパーへ入れ直す
+    shareOverlay.replaceChildren(el('div', { class: 'overlay-card-wrap' }, [shareCard, closeX(shareOverlay)]))
     shareOverlay.classList.remove('hidden')
   } })
 
@@ -282,10 +280,10 @@ export function mountHost(app) {
 
   // 接続診断（出題者側）
   const hostDiagText = el('div', { class: 'diag-log' })
-  const hostDiagOverlay = el('div', { class: 'overlay diag-overlay hidden' }, [
+  const hostDiagOverlay = popupOverlay(
+    'diag-overlay',
     el('div', { class: 'card rules-card' }, [el('h2', { text: '接続診断' }), hostDiagText]),
-    el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => hostDiagOverlay.classList.add('hidden') }),
-  ])
+  )
   const hostDiagBtn = el('button', { class: 'btn btn-small', text: '接続診断を表示', onclick: () => {
     hostDiagText.textContent = diagText(40)
     hostDiagOverlay.classList.remove('hidden')
@@ -314,7 +312,8 @@ export function mountHost(app) {
 
   const handicapRows = el('div', { class: 'score-rows' })
   const handicapPlaceholder = el('p', { class: 'placeholder', text: 'まだ参加者がいません' })
-  const rulesOverlay = el('div', { class: 'overlay rules-overlay hidden' }, [
+  const rulesOverlay = popupOverlay(
+    'rules-overlay',
     el('div', { class: 'card rules-card' }, [
       el('h2', { text: 'ルール設定' }),
       el('label', { class: 'settings-row' }, [el('span', { text: '回答形式' }), answerModeSelect]),
@@ -339,8 +338,7 @@ export function mountHost(app) {
       handicapPlaceholder,
       handicapRows,
     ]),
-    el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => rulesOverlay.classList.add('hidden') }),
-  ])
+  )
 
   function openRules() {
     // この端末が既に実IP候補を出している場合、互換モードは不要
@@ -497,7 +495,8 @@ export function mountHost(app) {
         : 'ブラウザ保存は消えることがあります。作ったらエクスポートしてファイルを正本にしてください'
   }
 
-  const bankOverlay = el('div', { class: 'overlay bank-overlay hidden' }, [
+  const bankOverlay = popupOverlay(
+    'bank-overlay',
     el('div', { class: 'card rules-card' }, [
       el('h2', { text: '問題セット' }),
       bankPlaceholder,
@@ -507,8 +506,7 @@ export function mountHost(app) {
       el('div', { class: 'btn-row' }, [bankImportBtn, exportBtn, importLabel]),
       exportNote,
     ]),
-    el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => bankOverlay.classList.add('hidden') }),
-  ])
+  )
   const bankBtn = el('button', { class: 'btn btn-small', text: 'セット', onclick: () => {
     renderBank()
     bankOverlay.classList.remove('hidden')

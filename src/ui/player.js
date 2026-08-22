@@ -7,7 +7,7 @@ import { teamMeta, teamTotals } from '../game/teams.js'
 import { diagText } from '../net/diag.js'
 import { applyBackground, shuffleBackground } from './background.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
-import { backdropDismiss, el } from '../util/dom.js'
+import { backdropDismiss, el, popupOverlay } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
 import { BUZZER_STYLES, getBuzzerStyle } from './buzzer-styles.js'
 import { buzzerSprite, spriteFormatReady } from './sprites.js'
@@ -192,10 +192,10 @@ function startGame(app, roomCode, nick) {
   const meSummary = el('span', { class: 'me-summary', text: '—' })
   const boardTotals = el('div', { class: 'team-totals' })
   const boardRows = el('div', { class: 'board-rows' })
-  const boardOverlay = el('div', { class: 'overlay board-overlay hidden' }, [
+  const boardOverlay = popupOverlay(
+    'board-overlay',
     el('div', { class: 'card board-card' }, [el('h2', { text: '得点表' }), boardTotals, boardRows]),
-    el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => boardOverlay.classList.add('hidden') }),
-  ])
+  )
   const bottomBar = el('div', { class: 'bottom-bar' }, [
     el('span', { class: 'bottom-me' }, [myTeamChip, meSummary]),
     el('button', { class: 'btn btn-small', text: '得点表', onclick: () => boardOverlay.classList.remove('hidden') }),
@@ -294,27 +294,28 @@ function startGame(app, roomCode, nick) {
 
   // 接続診断: 接続ステータスが赤のときだけトップバーにヘルプとして出す
   const diagViewText = el('div', { class: 'diag-log' })
-  const diagOverlay = el('div', { class: 'overlay diag-overlay hidden' }, [
+  const diagOverlay = popupOverlay(
+    'diag-overlay',
     el('div', { class: 'card rules-card' }, [el('h2', { text: '接続診断' }), diagViewText]),
-    el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => diagOverlay.classList.add('hidden') }),
-  ])
+  )
   const helpBtn = el('button', { class: 'btn btn-small hidden', text: 'ヘルプ', onclick: () => {
     diagViewText.textContent = diagText(40)
     diagOverlay.classList.remove('hidden')
   } })
 
-  const settingsOverlay = el('div', { class: 'overlay settings-overlay hidden' }, [
+  const settingsOverlay = popupOverlay(
+    'settings-overlay',
     el('div', { class: 'card rules-card' }, [
       el('h2', { text: '設定' }),
       el('div', { class: 'settings-row settings-col' }, [el('span', { text: 'ボタンの見た目' }), styleGrid]),
       el('div', { class: 'settings-row' }, [el('span', { text: '効果音' }), volumeSlider]),
       el('label', { class: 'settings-row' }, [el('span', { text: '背景' }), backgroundCheck]),
     ]),
-    el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => settingsOverlay.classList.add('hidden') }),
-  ])
+  )
   const settingsBtn = el('button', {
-    class: 'btn btn-small',
-    text: '設定',
+    class: 'icon-btn',
+    text: '⚙︎',
+    'aria-label': '設定',
     onclick: () => settingsOverlay.classList.remove('hidden'),
   })
 

@@ -927,6 +927,45 @@ textarea.input {
   display: none;
 }
 
+/* ポップアップのカードを包み、右上の×をカードのスクロールと無関係に固定する */
+.overlay-card-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  min-height: 0;
+}
+
+.overlay-close {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* トップバー等の枠なしアイコンボタン */
+.icon-btn {
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .overlay h2 {
   margin: 0;
   font-size: 1.2rem;

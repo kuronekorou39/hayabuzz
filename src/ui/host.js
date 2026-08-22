@@ -23,7 +23,7 @@ import { validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
 import { backdropDismiss, el } from '../util/dom.js'
-import { applyBackground } from './background.js'
+import { applyBackground, shuffleBackground } from './background.js'
 import { randomCode } from '../util/random.js'
 import { setLeaveGuard } from './leave-guard.js'
 
@@ -215,7 +215,9 @@ export function mountHost(app) {
   backgroundCheck.addEventListener('change', () => {
     prefs.background = backgroundCheck.checked
     savePrefs(prefs)
-    applyBackground(prefs.background)
+    // ON にするたびに別のパターンを引き直す（シャッフル操作を兼ねる）
+    if (prefs.background) shuffleBackground()
+    else applyBackground(false)
   })
 
   // --- 進行中の共有オーバーレイ ---
@@ -254,6 +256,13 @@ export function mountHost(app) {
     el('option', { value: 'all', text: '押した全員に鳴る' }),
   ])
   pressSoundSelect.addEventListener('change', () => game.setPressSound(pressSoundSelect.value))
+
+  const rankBadgesSelect = el('select', { class: 'input' }, [
+    el('option', { value: 'top3', text: '上位3人にメダル' }),
+    el('option', { value: 'first', text: '1位に王冠' }),
+    el('option', { value: 'none', text: 'なし' }),
+  ])
+  rankBadgesSelect.addEventListener('change', () => game.setRankBadges(rankBadgesSelect.value))
 
   const nickResumeCheck = el('input', { type: 'checkbox' })
   nickResumeCheck.addEventListener('change', () => game.setNickResume(nickResumeCheck.checked))
@@ -315,6 +324,7 @@ export function mountHost(app) {
       el('label', { class: 'settings-row' }, [el('span', { text: '正解の得点' }), correctPointsSelect]),
       el('label', { class: 'settings-row' }, [el('span', { text: '誤答の得点' }), wrongPointsSelect]),
       el('label', { class: 'settings-row' }, [el('span', { text: '勝ち抜けライン' }), winScoreSelect]),
+      el('label', { class: 'settings-row' }, [el('span', { text: '得点表の順位マーク' }), rankBadgesSelect]),
       el('label', { class: 'settings-row' }, [el('span', { text: 'チーム戦' }), teamsSelect, shuffleBtn]),
       el('label', { class: 'settings-row' }, [
         el('span', { text: '同名での復帰（得点引き継ぎ）' }),
@@ -342,6 +352,7 @@ export function mountHost(app) {
     revealSelect.value = game.rules.reveal
     revealSpeedSelect.value = String(game.rules.revealCps)
     pressSoundSelect.value = game.rules.pressSound
+    rankBadgesSelect.value = game.rules.rankBadges
     nickResumeCheck.checked = game.rules.nickResume
     correctPointsSelect.value = String(game.rules.correctPoints)
     wrongPointsSelect.value = String(game.rules.wrongPoints)

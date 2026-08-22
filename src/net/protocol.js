@@ -1,7 +1,7 @@
 import { CONFIG } from '../config.js'
 import { PHASE } from '../game/phases.js'
 
-export const PROTO_VERSION = 3 // state の players に rttMs を追加（旧版とはスキーマ非互換）
+export const PROTO_VERSION = 4 // rules に rankBadges を追加（旧版とはスキーマ非互換）
 
 export const MSG = {
   // player → host
@@ -74,6 +74,7 @@ const SCHEMAS = {
       winScore: isNum,
       teams: isNum,
       answerMode: oneOf(['buzzer', 'ox', 'choice4']),
+      rankBadges: oneOf(['none', 'first', 'top3']),
     }),
     revealBase: isNum, // 読み上げ（順次表示）の確定位置
     answeredIds: arrayOf(id), // 一斉回答モードで回答済みの player（内容は締切まで隠す）

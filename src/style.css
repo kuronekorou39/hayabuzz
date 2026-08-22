@@ -654,11 +654,22 @@ textarea.input {
   accent-color: var(--primary);
 }
 
-/* 1行に複数のコントロールを並べる（背景のシャッフル+ON/OFF など） */
-.settings-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+/* 得点表: 自分の行の目印と順位マーク（王冠・メダル） */
+.you-chip {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: var(--primary);
+  border-radius: 5px;
+  padding: 1px 6px;
+  flex: none;
+}
+
+.rank-mark {
+  flex: none;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 /* ボタンの見た目: 縦積みの行 + ミニプレビューのグリッド */

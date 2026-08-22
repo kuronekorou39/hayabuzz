@@ -287,16 +287,10 @@ function startGame(app, roomCode, nick) {
   backgroundCheck.addEventListener('change', () => {
     prefs.background = backgroundCheck.checked
     savePrefs(prefs)
-    applyBackground(prefs.background)
+    // ON にするたびに別のパターンを引き直す（シャッフル操作を兼ねる）
+    if (prefs.background) shuffleBackground()
+    else applyBackground(false)
   })
-  const bgShuffleBtn = el('button', { class: 'btn btn-small', text: 'シャッフル', onclick: () => {
-    if (!prefs.background) {
-      prefs.background = true
-      backgroundCheck.checked = true
-      savePrefs(prefs)
-    }
-    shuffleBackground()
-  } })
 
   // 接続診断: 接続ステータスが赤のときだけトップバーにヘルプとして出す
   const diagViewText = el('div', { class: 'diag-log' })
@@ -314,10 +308,7 @@ function startGame(app, roomCode, nick) {
       el('h2', { text: '設定' }),
       el('div', { class: 'settings-row settings-col' }, [el('span', { text: 'ボタンの見た目' }), styleGrid]),
       el('div', { class: 'settings-row' }, [el('span', { text: '効果音' }), volumeSlider]),
-      el('div', { class: 'settings-row' }, [
-        el('span', { text: '背景' }),
-        el('span', { class: 'settings-controls' }, [bgShuffleBtn, backgroundCheck]),
-      ]),
+      el('label', { class: 'settings-row' }, [el('span', { text: '背景' }), backgroundCheck]),
     ]),
     el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => settingsOverlay.classList.add('hidden') }),
   ])
@@ -491,8 +482,9 @@ function startGame(app, roomCode, nick) {
 
   function renderQuestionText() {
     if (snapshot.phase === PHASE.WAITING || snapshot.phase === PHASE.FINAL) {
+      // 状態はフェーズ表示が伝えるので、問題カードは空にして画面を静かに保つ
       stopRevealAnim()
-      setQuestionText('（問題を待っています）')
+      setQuestionText('')
       return
     }
     if (snapshot.questionText === '') {
@@ -517,6 +509,22 @@ function startGame(app, roomCode, nick) {
       stopRevealAnim()
       setQuestionText(serialQuestionText(snapshot.revealBase), true)
     }
+  }
+
+  // 得点順の順位（同点は同順位）
+  function scoreRankOf(p) {
+    return 1 + snapshot.players.filter((other) => other.score > p.score).length
+  }
+
+  // 得点表の順位マーク（ルールで切替）。最下位タイには付けない
+  // （開始直後の全員同点で全員に付いたり、3人中の最下位にメダルが付くのを防ぐ）
+  function rankMark(p) {
+    const mode = snapshot.rules.rankBadges
+    if (mode === 'none') return ''
+    if (!snapshot.players.some((other) => other.score < p.score)) return ''
+    const rank = scoreRankOf(p)
+    if (mode === 'first') return rank === 1 ? '👑' : ''
+    return rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : ''
   }
 
   // --- 状態描画（host から配信されたスナップショットを描くだけ） ---
@@ -595,12 +603,16 @@ function startGame(app, roomCode, nick) {
       }
       const ranking = [...snapshot.players].sort((a, b) => b.score - a.score)
       finalRows.replaceChildren(
-        ...ranking.map((p, index) => {
+        ...ranking.map((p) => {
           const meta = snapshot.rules.teams > 0 ? teamMeta(p.team) : null
+          const rank = scoreRankOf(p) // 同点は同順位
+          const mark = rankMark(p)
           return el('div', { class: p.playerId === playerId ? 'board-row me' : 'board-row' }, [
-            el('span', { class: index === 0 ? 'final-rank final-top' : 'final-rank', text: `${index + 1}位` }),
+            el('span', { class: rank === 1 ? 'final-rank final-top' : 'final-rank', text: `${rank}位` }),
+            ...(mark !== '' ? [el('span', { class: 'rank-mark', text: mark })] : []),
             ...(meta !== null ? [el('span', { class: `team-chip ${meta.cls}`, text: meta.label })] : []),
             el('span', { class: 'board-nick', text: p.nick }),
+            ...(p.playerId === playerId ? [el('span', { class: 'you-chip', text: 'YOU' })] : []),
             el('span', { class: 'board-score', text: `${p.score}点` }),
           ])
         }),
@@ -642,16 +654,16 @@ function startGame(app, roomCode, nick) {
       stateClasses.push('dim')
       buzzerLabel.textContent = '次の問題待ち'
     } else {
+      // 待機中（ゲームの状態はフェーズ表示が伝えるので、ボタンには押せる/押せないだけ書く）
       stateClasses.push('dim')
-      buzzerLabel.textContent = '待機中'
+      buzzerLabel.textContent = 'まだ押せません'
     }
     applyBuzzerClasses()
 
     // 自分の得点の要約（得点順の順位）。得点が変わったらポップさせる
     const me = snapshot.players.find((p) => p.playerId === playerId)
     if (me !== undefined) {
-      const scoreRank = 1 + snapshot.players.filter((p) => p.score > me.score).length
-      meSummary.textContent = `${me.score}点 · ${scoreRank}位/${snapshot.players.length}人`
+      meSummary.textContent = `${me.score}点 · ${scoreRankOf(me)}位/${snapshot.players.length}人`
       if (lastScore !== null && me.score !== lastScore) {
         meSummary.classList.remove('pop')
         void meSummary.offsetWidth
@@ -685,10 +697,13 @@ function startGame(app, roomCode, nick) {
     boardRows.replaceChildren(
       ...board.map((p) => {
         const meta = snapshot.rules.teams > 0 ? teamMeta(p.team) : null
+        const mark = rankMark(p)
         return el('div', { class: p.playerId === playerId ? 'board-row me' : 'board-row' }, [
           el('span', { class: p.connected ? 'dot on' : 'dot off' }),
+          ...(mark !== '' ? [el('span', { class: 'rank-mark', text: mark })] : []),
           ...(meta !== null ? [el('span', { class: `team-chip ${meta.cls}`, text: meta.label })] : []),
           el('span', { class: 'board-nick', text: p.nick }),
+          ...(p.playerId === playerId ? [el('span', { class: 'you-chip', text: 'YOU' })] : []),
           ...(snapshot.rules.winScore > 0 && p.score >= snapshot.rules.winScore
             ? [el('span', { class: 'badge win', text: '勝ち抜け' })]
             : []),

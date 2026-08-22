@@ -128,7 +128,7 @@ function startGame(app, roomCode, nick) {
   const statusDot = el('span', { class: 'dot wait' })
   const statusText = el('span', { class: 'status-text', text: '接続中' })
   const phaseEl = el('div', { class: 'phase-banner', text: '接続中…' })
-  const questionEl = el('div', { class: 'question-text card question-clamp', text: '' })
+  const questionEl = el('div', { class: 'question-text card question-area', text: '' })
 
   // 早押しボタン: 台（base）とボタン（cap）の2層 + 状態ラベル
   const buzzerBase = el('img', { class: 'buzzer-base', alt: '', draggable: 'false' })
@@ -338,10 +338,10 @@ function startGame(app, roomCode, nick) {
         ]),
         el('div', { class: 'status' }, [statusDot, statusText, settingsBtn]),
       ]),
-      phaseEl,
       questionEl,
       buzzer,
       answerPanel,
+      phaseEl, // ステータスはボタンの下（問題文の長さでボタンが動かない配置）
       bottomBar,
     ]),
     overlay,
@@ -440,6 +440,17 @@ function startGame(app, roomCode, nick) {
     return count <= 0 ? '（早押し開始で問題文が読み上げられます）' : text.slice(0, count)
   }
 
+  // 問題文エリアは3行ぶんの高さ固定。収まらなければ文字を1段階縮小し、
+  // それでも超える分はスクロールで見る。stickToEnd は読み上げ中に
+  // 最新の文字が見えるよう末尾へ追従させる
+  function setQuestionText(text, stickToEnd = false) {
+    if (questionEl.textContent === text) return
+    questionEl.textContent = text
+    questionEl.classList.remove('question-small')
+    if (questionEl.scrollHeight > questionEl.clientHeight + 2) questionEl.classList.add('question-small')
+    questionEl.scrollTop = stickToEnd ? questionEl.scrollHeight : 0
+  }
+
   function renderRevealFrame() {
     if (snapshot === null || snapshot.phase !== PHASE.ARMED) {
       stopRevealAnim()
@@ -447,19 +458,19 @@ function startGame(app, roomCode, nick) {
     }
     const elapsedSec = (performance.now() - armedSeenAt) / 1000
     const chars = snapshot.revealBase + snapshot.rules.revealCps * elapsedSec
-    questionEl.textContent = serialQuestionText(chars)
+    setQuestionText(serialQuestionText(chars), true)
     if (chars >= snapshot.questionText.length) stopRevealAnim()
   }
 
   function renderQuestionText() {
     if (snapshot.questionText === '') {
       stopRevealAnim()
-      questionEl.textContent = '（口頭で出題）'
+      setQuestionText('（口頭で出題）')
       return
     }
     if (snapshot.rules.reveal !== 'serial') {
       stopRevealAnim()
-      questionEl.textContent = snapshot.questionText
+      setQuestionText(snapshot.questionText)
       return
     }
     if (snapshot.phase === PHASE.ARMED) {
@@ -472,7 +483,7 @@ function startGame(app, roomCode, nick) {
       if (revealTimer === null) revealTimer = setInterval(renderRevealFrame, 80)
     } else {
       stopRevealAnim()
-      questionEl.textContent = serialQuestionText(snapshot.revealBase)
+      setQuestionText(serialQuestionText(snapshot.revealBase), true)
     }
   }
 

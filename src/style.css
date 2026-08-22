@@ -291,6 +291,20 @@ textarea.input {
   overflow-y: auto;
 }
 
+/* 回答者の問題文エリア: 3行ぶんの高さを常に確保し、問題文の長さで
+   ボタンの位置が動かないようにする。収まらない場合は question-small で
+   文字を縮小し（高さは rem 基準なので変わらない）、それでも超えればスクロール */
+.question-area {
+  height: calc(4.5rem + 26px); /* 3行(line-height 1.5) + カードの padding 12×2 + border 2 */
+  line-height: 1.5;
+  flex: none;
+  overflow-y: auto;
+}
+
+.question-area.question-small {
+  font-size: 0.85rem;
+}
+
 .order-list {
   margin: 0;
   padding: 0 0 0 1.6em;

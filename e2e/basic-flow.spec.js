@@ -36,7 +36,9 @@ test('基本フロー: 参加→出題→早押し→正解→再接続→部屋
   await expect(p1.page.locator('.toast.ok', { hasText: '正解！ +1点' })).toBeVisible()
   await expect(p1.page.locator('.me-summary')).toContainText('1点')
 
-  // 一時切断→再接続（リロード）で同一セッションIDにより得点を引き継ぐ
+  // 一時切断→再接続（リロード）で同一セッションIDにより得点を引き継ぐ。
+  // 接続中のリロードには確認ダイアログ（leave-guard）が出るので受諾して進める
+  p1.page.on('dialog', (dialog) => dialog.accept())
   await p1.page.reload()
   await p1.page.locator('input[placeholder="ニックネーム"]').fill('たろう')
   await p1.page.getByRole('button', { name: '参加する' }).click()

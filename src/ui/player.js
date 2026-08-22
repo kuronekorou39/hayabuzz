@@ -11,6 +11,7 @@ import { backdropDismiss, el } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
 import { BUZZER_STYLES, getBuzzerStyle } from './buzzer-styles.js'
 import { buzzerSprite, spriteFormatReady } from './sprites.js'
+import { setLeaveGuard } from './leave-guard.js'
 
 const SESSION_KEY = 'hayabuzz.sessionId'
 const NICK_KEY = 'hayabuzz.nick' // タブのセッション内のみ保持（localStorage には保存しない）
@@ -26,6 +27,7 @@ function getSessionId() {
 }
 
 function goTop() {
+  setLeaveGuard(false) // 自分の意思で出るときは確認しない
   history.replaceState(null, '', location.pathname + location.search)
   location.reload()
 }
@@ -725,11 +727,13 @@ function startGame(app, roomCode, nick) {
     hostPeerId = peerId
     playerId = msg.playerId
     hideOverlay()
+    setLeaveGuard(true) // 接続中の誤リロードで部屋から出ないよう確認を挟む
     setStatus('on', msg.resumed ? '再接続しました' : '接続済み')
     if (msg.resumed) showToast('得点を引き継ぎました', 'ok')
   }
 
   function showRoomClosed() {
+    setLeaveGuard(false) // 部屋が終了した後のリロードは自由
     setStatus('off', '切断')
     showOverlay('部屋が終了しました', '出題者との接続が切れました。ホストなしでは続行できません。', [
       el('button', { class: 'btn btn-primary', text: 'トップへ戻る', onclick: goTop }),

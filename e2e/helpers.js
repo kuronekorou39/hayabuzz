@@ -8,7 +8,7 @@ export async function createRoom(browser) {
   await page.goto('./')
   await page.getByRole('button', { name: '出題者として部屋を作る' }).click()
   const code = (await page.locator('.room-code').textContent()).trim()
-  expect(code).toMatch(/^[A-Z0-9]{10}$/)
+  expect(code).toMatch(/^[A-Z0-9]{4}$/)
   await page.getByRole('button', { name: 'クイズを開始' }).click()
   return { context, page, code }
 }

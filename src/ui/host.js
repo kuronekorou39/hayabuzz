@@ -25,6 +25,7 @@ import { loadPrefs, savePrefs } from '../prefs.js'
 import { backdropDismiss, el } from '../util/dom.js'
 import { applyBackground } from './background.js'
 import { randomCode } from '../util/random.js'
+import { setLeaveGuard } from './leave-guard.js'
 
 export function mountHost(app) {
   unlockAudio() // トップ画面のクリック（ユーザー操作）を起点に AudioContext を有効化
@@ -763,5 +764,7 @@ export function mountHost(app) {
 
   showLobby()
   render()
+  // 出題者のリロードは部屋の終了を意味するため、以後は常に確認を挟む
+  setLeaveGuard(true)
   transport.join(roomCode).catch(() => {}) // 失敗内容は診断ログに記録済み
 }

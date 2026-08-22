@@ -53,6 +53,6 @@ export const CONFIG = {
   // 入力制限（プロトコル検証と UI の maxlength で共用）
   nickMaxLen: 20,
   questionMaxLen: 500,
-  roomCodeLen: 10,
+  roomCodeLen: 4, // 招待した仲間内で使う前提なので、手入力しやすい短さを優先
   sessionIdLen: 16,
 }

@@ -17,6 +17,7 @@ test('問題セット: 追加→出題→答えの手元表示→正解者名の
   // セットから出題 → player に問題文が配信され、host には答え・メモが手元表示される
   await host.page.getByRole('button', { name: 'セットから次を出題' }).click()
   await expect(p1.page.locator('.question-text')).toContainText('富士山の標高は？')
+  await expect(p1.page.locator('.q-badge')).toHaveText('Q1')
   await expect(host.page.locator('.answer-note')).toContainText('答え: 3776m')
   await expect(host.page.locator('.answer-note')).toContainText('メートル単位で回答')
   // player 側には答えは一切表示されない（DOM 全体に含まれない）
@@ -32,6 +33,8 @@ test('問題セット: 追加→出題→答えの手元表示→正解者名の
   await pressBuzzer(p1.page)
   await expect(p1.page.locator('.buzzer-label')).toHaveText('回答してください！')
   await host.page.getByRole('button', { name: '正解', exact: true }).click()
+  // 判定結果になって初めて player 側に答えが表示される
+  await expect(p1.page.locator('.phase-banner')).toContainText('答え：3776m')
 
   await host.page.getByRole('button', { name: 'セット', exact: true }).click()
   await expect(host.page.locator('.bank-row')).toContainText('たろう')

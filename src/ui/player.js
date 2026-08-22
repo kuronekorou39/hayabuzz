@@ -130,7 +130,13 @@ function startGame(app, roomCode, nick) {
   const statusDot = el('span', { class: 'dot wait' })
   const statusText = el('span', { class: 'status-text', text: '接続中' })
   const phaseEl = el('div', { class: 'phase-banner', text: '接続中…' })
-  const questionEl = el('div', { class: 'question-text card question-area', text: '' })
+  // 問題カード: Q番号バッジ + 本文（3行ぶんの高さ固定）
+  const qBadge = el('span', { class: 'q-badge ghost', text: '' })
+  const questionEl = el('div', { class: 'question-text question-body', text: '' })
+  const questionCard = el('div', { class: 'card question-card' }, [
+    el('div', { class: 'question-head' }, [qBadge]),
+    questionEl,
+  ])
 
   // 早押しボタン: 台（base）とボタン（cap）の2層 + 状態ラベル
   const buzzerBase = el('img', { class: 'buzzer-base', alt: '', draggable: 'false' })
@@ -340,7 +346,7 @@ function startGame(app, roomCode, nick) {
         ]),
         el('div', { class: 'status' }, [statusDot, statusText, settingsBtn]),
       ]),
-      questionEl,
+      questionCard,
       buzzer,
       answerPanel,
       phaseEl, // ステータスはボタンの下（問題文の長さでボタンが動かない配置）
@@ -465,6 +471,11 @@ function startGame(app, roomCode, nick) {
   }
 
   function renderQuestionText() {
+    if (snapshot.phase === PHASE.WAITING || snapshot.phase === PHASE.FINAL) {
+      stopRevealAnim()
+      setQuestionText('（問題を待っています）')
+      return
+    }
     if (snapshot.questionText === '') {
       stopRevealAnim()
       setQuestionText('（口頭で出題）')
@@ -495,8 +506,16 @@ function startGame(app, roomCode, nick) {
   function renderState() {
     if (snapshot === null) return
     const mass = snapshot.rules.answerMode !== 'buzzer'
-    phaseEl.textContent = (mass ? MASS_PHASE_LABEL[snapshot.phase] : undefined) ?? PHASE_LABEL[snapshot.phase]
+    // 判定結果では（答えが設定されていれば）フェーズ名の代わりに答えを表示する
+    phaseEl.textContent =
+      snapshot.phase === PHASE.RESULT && snapshot.answerText !== null
+        ? `答え：${snapshot.answerText}`
+        : ((mass ? MASS_PHASE_LABEL[snapshot.phase] : undefined) ?? PHASE_LABEL[snapshot.phase])
     phaseEl.className = `phase-banner phase-${snapshot.phase}`
+    // Q番号バッジ（出題前後は visibility だけ消して高さを保つ）
+    const badgeVisible = snapshot.phase !== PHASE.WAITING && snapshot.phase !== PHASE.FINAL
+    qBadge.textContent = badgeVisible ? `Q${snapshot.qid}` : ''
+    qBadge.classList.toggle('ghost', !badgeVisible)
     // 新しい問題が来たら出現アニメーションを付ける
     if (questionEl.dataset.qid !== String(snapshot.qid)) {
       questionEl.dataset.qid = String(snapshot.qid)

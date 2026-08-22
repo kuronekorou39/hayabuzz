@@ -16,6 +16,7 @@ export class HostGame {
     this.phase = PHASE.WAITING
     this.qid = 0
     this.questionText = ''
+    this.answerText = '' // 問題セットから出題したときの答え（判定結果でのみ配信）
     this.armedAt = null
     this.presses = [] // { playerId, hostT }
     this.order = []
@@ -181,8 +182,9 @@ export class HostGame {
   // ---- host の操作 ----
 
   // 新しい問題を表示する（RESULT からの「次の問題」もこの操作）
-  showQuestion(text) {
+  showQuestion(text, answer = '') {
     this.questionText = text.trim().slice(0, CONFIG.questionMaxLen)
+    this.answerText = answer.trim().slice(0, 200)
     this.qid += 1
     this.phase = PHASE.QUESTION
     this.armedAt = null
@@ -557,6 +559,8 @@ export class HostGame {
           ? [...this.answers.entries()].map(([playerId, value]) => ({ playerId, value }))
           : null, // 締切までは回答内容を配信しない（覗き見・コピー防止）
       correctValue: this.correctValue,
+      // 答えは判定結果になって初めて配信する（受付中に配ると開発者ツールで覗ける）
+      answerText: this.phase === PHASE.RESULT && this.answerText !== '' ? this.answerText : null,
     }
   }
 

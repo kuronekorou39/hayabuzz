@@ -1,7 +1,7 @@
 import { CONFIG } from '../config.js'
 import { PHASE } from '../game/phases.js'
 
-export const PROTO_VERSION = 1
+export const PROTO_VERSION = 2 // state に answerText を追加（v1 とはスキーマ非互換）
 
 export const MSG = {
   // player → host
@@ -71,6 +71,7 @@ const SCHEMAS = {
     answeredIds: arrayOf(id), // 一斉回答モードで回答済みの player（内容は締切まで隠す）
     revealedAnswers: nullable(arrayOf(shapeOf({ playerId: id, value: str(100) }))),
     correctValue: nullable(str(100)), // 一斉回答モードの正答（発表後）
+    answerText: nullable(str(200)), // 答え（判定結果のときだけ。それ以外は null で覗き見不可）
   },
 }
 

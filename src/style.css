@@ -291,17 +291,43 @@ textarea.input {
   overflow-y: auto;
 }
 
-/* 回答者の問題文エリア: 3行ぶんの高さを常に確保し、問題文の長さで
-   ボタンの位置が動かないようにする。収まらない場合は question-small で
-   文字を縮小し（高さは rem 基準なので変わらない）、それでも超えればスクロール */
-.question-area {
-  height: calc(4.5rem + 26px); /* 3行(line-height 1.5) + カードの padding 12×2 + border 2 */
-  line-height: 1.5;
+/* 回答者の問題カード: 左のアクセントと Q バッジで「これが問題」と分かる見た目にする。
+   本文は3行ぶんの高さを常に確保し、問題文の長さでボタンの位置が動かないようにする。
+   収まらない場合は question-small で文字を縮小し（高さは rem 基準なので変わらない）、
+   それでも超えればスクロール */
+.question-card {
   flex: none;
+  border-left: 3px solid var(--primary);
+  gap: 6px;
+}
+
+.question-head {
+  display: flex;
+  align-items: center;
+  min-height: 1.3rem; /* バッジ非表示のあいだも高さを保ち、レイアウトを動かさない */
+}
+
+.q-badge {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #9db8ff;
+  background: rgba(90, 140, 255, 0.16);
+  border-radius: 6px;
+  padding: 1px 8px;
+}
+
+.q-badge.ghost {
+  visibility: hidden;
+}
+
+.question-body {
+  height: 4.5rem; /* 3行(line-height 1.5)ぶん */
+  line-height: 1.5;
   overflow-y: auto;
 }
 
-.question-area.question-small {
+.question-body.question-small {
   font-size: 0.85rem;
 }
 
@@ -400,13 +426,19 @@ textarea.input {
   overflow: hidden;
 }
 
+/* フェーズ表示は角丸のピル。問題カード（四角）や下部バー（罫線）と形で区別する */
 .phase-banner {
+  align-self: center;
+  max-width: 100%;
   text-align: center;
   font-weight: 700;
+  font-size: 0.95rem;
   background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px;
+  border-radius: 999px;
+  padding: 7px 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* フェーズごとの色（回答者のバナーと出題者のチップで共用） */
@@ -703,16 +735,14 @@ textarea.input {
   border-radius: 18px;
 }
 
-/* 下部バー（自分の得点の要約 + 得点表ボタン） */
+/* 下部バー（自分の得点の要約 + 得点表ボタン）。枠は持たず罫線1本のツールバー */
 .bottom-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  padding: 10px 2px 0;
 }
 
 .me-summary {

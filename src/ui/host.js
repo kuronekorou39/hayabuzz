@@ -378,7 +378,7 @@ export function mountHost(app) {
     markAsked(bankItems, item.id, Date.now())
     saveBank(bankItems)
     questionInput.value = ''
-    game.showQuestion(item.q)
+    game.showQuestion(item.q, item.a) // 答えは判定結果のときに全員へ表示される
     bankOverlay.classList.add('hidden')
   }
 

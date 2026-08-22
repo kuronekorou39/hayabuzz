@@ -535,6 +535,11 @@ function startGame(app, roomCode, nick) {
     const badgeVisible = snapshot.phase !== PHASE.WAITING && snapshot.phase !== PHASE.FINAL
     qBadge.textContent = badgeVisible ? `Q${snapshot.qid}` : ''
     qBadge.classList.toggle('ghost', !badgeVisible)
+    // 接続ランプの横には文字の代わりに通信の往復時間を出す（緑のときだけ）
+    if (statusDot.classList.contains('on')) {
+      const meRtt = snapshot.players.find((p) => p.playerId === playerId)?.rttMs
+      statusText.textContent = meRtt == null ? '' : `${meRtt}ms`
+    }
     // 新しい問題が来たら出現アニメーションを付ける
     if (questionEl.dataset.qid !== String(snapshot.qid)) {
       questionEl.dataset.qid = String(snapshot.qid)
@@ -760,17 +765,63 @@ function startGame(app, roomCode, nick) {
 
   // --- 通信 ---
 
+  // host からの応答の監視。DataChannel は信頼配送なので、定期同期（10秒ごと）が
+  // 一定時間届かなければ回線が死んでいるとみなせる（機内モード等では ICE の
+  // 切断検出が遅れる・発火しないことがあるため、アプリ層でも監視する）
+  let lastHostMsgAt = performance.now()
+  let connLost = false
+  let roomEnded = false
+
+  function showConnLost() {
+    connLost = true
+    setStatus('off', '応答なし')
+    showOverlay('接続が切れました', '出題者からの応答がありません。通信環境を確認してください。回線が復帰すれば自動で再開します。戻らない場合は再接続してください。', [
+      el('button', { class: 'btn btn-primary', text: '再接続する', onclick: () => {
+        setLeaveGuard(false)
+        location.reload()
+      } }),
+      el('button', { class: 'btn', text: 'トップへ戻る', onclick: goTop }),
+    ], { withSpinner: true, withDiag: true })
+  }
+
+  function noteHostAlive() {
+    lastHostMsgAt = performance.now()
+    if (connLost && !roomEnded) {
+      connLost = false
+      hideOverlay()
+      setStatus('on', '')
+      showToast('接続が復帰しました', 'ok')
+    }
+  }
+
+  setInterval(() => {
+    if (hostPeerId === null || roomEnded || connLost) return
+    if (performance.now() - lastHostMsgAt < CONFIG.hostSilenceTimeoutMs) return
+    showConnLost()
+  }, 3000)
+  // タブがスリープしていた間の無応答は誤検出なので、復帰時に起点を取り直す
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) lastHostMsgAt = performance.now()
+  })
+
   function acceptWelcome(msg, peerId) {
     clearTimeout(joinTimer)
     hostPeerId = peerId
     playerId = msg.playerId
+    lastHostMsgAt = performance.now()
     hideOverlay()
     setLeaveGuard(true) // 接続中の誤リロードで部屋から出ないよう確認を挟む
-    setStatus('on', msg.resumed ? '再接続しました' : '接続済み')
+    setStatus('on', '') // 文字は出さない（緑ランプ + state 受信後は ping 表示）
     if (msg.resumed) showToast('得点を引き継ぎました', 'ok')
   }
 
   function showRoomClosed() {
+    // 自分の回線が落ちているだけなら部屋はまだ生きている可能性が高い
+    if (navigator.onLine === false) {
+      showConnLost()
+      return
+    }
+    roomEnded = true
     setLeaveGuard(false) // 部屋が終了した後のリロードは自由
     setStatus('off', '切断')
     showOverlay('部屋が終了しました', '出題者との接続が切れました。ホストなしでは続行できません。', [
@@ -805,6 +856,7 @@ function startGame(app, roomCode, nick) {
       return
     }
     if (peerId !== hostPeerId) return // host 以外からのメッセージは無視（スター型）
+    noteHostAlive()
     switch (raw.type) {
       case MSG.PING:
         transport.send({ type: MSG.PONG, seq: raw.seq, t: performance.now() }, hostPeerId)

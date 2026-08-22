@@ -38,6 +38,7 @@ export class HostGame {
     this.revealBase = 0 // 読み上げの確定位置（文字数）。押下で凍結し、再開放で続きから
     this.answers = new Map() // 一斉回答モードの回答（sessionId → 値。締切まで上書き可）
     this.correctValue = null // 一斉回答モードで発表した正答
+    this.lastPingBroadcastAt = 0 // ping 表示更新用の定期配信の絞り
   }
 
   get isMassAnswerMode() {
@@ -119,7 +120,12 @@ export class HostGame {
     const player = this.#byPeer(peerId)
     if (!player) return
     if (player.sync.handlePong(msg.seq, msg.t, this.now())) {
-      // 同期状態はプロトコル状態に含まれないため、host UI の再描画のみ
+      // 定期同期のタイミングで state も配り直す（player の ping 表示の更新と、
+      // player 側の「host からの応答が続いているか」の監視を兼ねる。連発しないよう絞る）
+      if (this.now() - this.lastPingBroadcastAt > 4000) {
+        this.lastPingBroadcastAt = this.now()
+        this.send(this.snapshot())
+      }
       this.onChange()
     }
   }
@@ -543,6 +549,7 @@ export class HostGame {
         connected: p.connected,
         handicapMs: p.handicapMs,
         team: p.team,
+        rttMs: p.sync.rtt === null ? null : Math.round(p.sync.rtt),
       })),
       order: this.order.map((o) => ({
         playerId: o.playerId,

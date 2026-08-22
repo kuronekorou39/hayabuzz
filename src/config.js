@@ -3,6 +3,9 @@ export const CONFIG = {
   // 通信
   appId: 'hayabuzz-v1', // 部屋トピックの名前空間（info_hash の材料）
   joinTimeoutMs: 15000, // 参加確立（welcome受信）までの待ち時間
+  // host からの応答（定期同期は10秒ごと）が途絶えたと判断するまでの時間。
+  // DataChannel は信頼配送なので、1周期 + 余裕を超えた無音は回線断とみなせる
+  hostSilenceTimeoutMs: 15000,
   maxPlayers: 24,
 
   // シグナリング（WebTorrent トラッカーの WebSocket プロトコルを自前実装で使用）

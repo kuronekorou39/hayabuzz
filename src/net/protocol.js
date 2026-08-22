@@ -1,7 +1,7 @@
 import { CONFIG } from '../config.js'
 import { PHASE } from '../game/phases.js'
 
-export const PROTO_VERSION = 2 // state に answerText を追加（v1 とはスキーマ非互換）
+export const PROTO_VERSION = 3 // state の players に rttMs を追加（旧版とはスキーマ非互換）
 
 export const MSG = {
   // player → host
@@ -50,7 +50,15 @@ const SCHEMAS = {
     questionText: str0(CONFIG.questionMaxLen),
     armedAt: nullable(isNum), // 早押し受付開始の host 時刻（フライング判定の基準）
     players: arrayOf(
-      shapeOf({ playerId: id, nick, score: isNum, connected: isBool, handicapMs: isNum, team: isNum }),
+      shapeOf({
+        playerId: id,
+        nick,
+        score: isNum,
+        connected: isBool,
+        handicapMs: isNum,
+        team: isNum,
+        rttMs: nullable(isNum), // host が測った通信の往復時間（同期前は null）
+      }),
     ),
     order: arrayOf(shapeOf({ playerId: id, deltaMs: isNum })),
     activePlayerId: nullable(id), // 回答権を持つ player

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+﻿import { expect, test } from '@playwright/test'
 import { createRoom, joinPlayer, pressBuzzer } from './helpers.js'
 
 test('問題セット: 追加→出題→答えの手元表示→正解者名の記録→貼り付け取り込み', async ({ browser }) => {
@@ -15,7 +15,7 @@ test('問題セット: 追加→出題→答えの手元表示→正解者名の
   await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
 
   // セットから出題 → player に問題文が配信され、host には答え・メモが手元表示される
-  await host.page.getByRole('button', { name: 'セットから次を出題' }).click()
+  await host.page.getByRole('button', { name: 'セットから出題' }).click()
   await expect(p1.page.locator('.question-text')).toContainText('富士山の標高は？')
   await expect(p1.page.locator('.q-badge')).toHaveText('Q1')
   await expect(host.page.locator('.answer-note')).toContainText('答え: 3776m')
@@ -23,8 +23,8 @@ test('問題セット: 追加→出題→答えの手元表示→正解者名の
   // player 側には答えは一切表示されない（DOM 全体に含まれない）
   await expect(p1.page.locator('body')).not.toContainText('3776m')
 
-  // 出題済みになったので「セットから次を出題」は無効になる
-  await expect(host.page.getByRole('button', { name: 'セットから次を出題' })).toBeDisabled()
+  // 出題済みになったので「セットから出題」は無効になる
+  await expect(host.page.getByRole('button', { name: 'セットから出題' })).toBeDisabled()
 
   // 判定まで進めると出題履歴に正解者名が残る
   await host.page.waitForTimeout(2200)

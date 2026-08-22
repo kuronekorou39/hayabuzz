@@ -55,6 +55,7 @@ body {
   color: var(--dim);
   font-size: 0.85rem;
   margin-left: 6px;
+  white-space: nowrap; /* 「出題者」等が文字単位で割れないように */
 }
 
 .status {
@@ -128,6 +129,25 @@ button {
 
 .btn.hidden {
   display: none;
+}
+
+/* 出題の操作ボタン: 2列グリッドにして狭い画面での縦割れ折り返しを防ぐ */
+.action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.action-grid .btn {
+  white-space: nowrap;
+  padding: 12px 6px;
+}
+
+/* 進行カード見出しの右側（Qバッジ + フェーズチップ） */
+.phase-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .btn:disabled {

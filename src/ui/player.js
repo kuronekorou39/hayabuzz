@@ -1,6 +1,7 @@
-import { playBuzz, playCorrect, playWrong, playYourTurn, setSoundEnabled, setSoundVolume, unlockAudio } from '../audio.js'
+﻿import { playBuzz, playCorrect, playWrong, playYourTurn, setSoundEnabled, setSoundVolume, unlockAudio } from '../audio.js'
 import { CONFIG } from '../config.js'
 import { MASS_PHASE_LABEL, PHASE, PHASE_LABEL } from '../game/phases.js'
+import { rankMark, scoreRank } from '../game/rank.js'
 import { MSG, PROTO_VERSION, validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
 import { teamMeta, teamTotals } from '../game/teams.js'
@@ -509,21 +510,9 @@ function startGame(app, roomCode, nick) {
     }
   }
 
-  // 得点順の順位（同点は同順位）
-  function scoreRankOf(p) {
-    return 1 + snapshot.players.filter((other) => other.score > p.score).length
-  }
-
-  // 得点表の順位マーク（ルールで切替）。最下位タイには付けない
-  // （開始直後の全員同点で全員に付いたり、3人中の最下位にメダルが付くのを防ぐ）
-  function rankMark(p) {
-    const mode = snapshot.rules.rankBadges
-    if (mode === 'none') return ''
-    if (!snapshot.players.some((other) => other.score < p.score)) return ''
-    const rank = scoreRankOf(p)
-    if (mode === 'first') return rank === 1 ? '👑' : ''
-    return rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : ''
-  }
+  // 得点順の順位・順位マーク（判定ロジックは game/rank.js に共通化）
+  const scoreRankOf = (p) => scoreRank(snapshot.players, p)
+  const rankMarkOf = (p) => rankMark(snapshot.players, p, snapshot.rules.rankBadges)
 
   // --- 状態描画（host から配信されたスナップショットを描くだけ） ---
   let lastScore = null
@@ -604,7 +593,7 @@ function startGame(app, roomCode, nick) {
         ...ranking.map((p) => {
           const meta = snapshot.rules.teams > 0 ? teamMeta(p.team) : null
           const rank = scoreRankOf(p) // 同点は同順位
-          const mark = rankMark(p)
+          const mark = rankMarkOf(p)
           return el('div', { class: p.playerId === playerId ? 'board-row me' : 'board-row' }, [
             el('span', { class: rank === 1 ? 'final-rank final-top' : 'final-rank', text: `${rank}位` }),
             ...(mark !== '' ? [el('span', { class: 'rank-mark', text: mark })] : []),
@@ -701,7 +690,7 @@ function startGame(app, roomCode, nick) {
     boardRows.replaceChildren(
       ...board.map((p) => {
         const meta = snapshot.rules.teams > 0 ? teamMeta(p.team) : null
-        const mark = rankMark(p)
+        const mark = rankMarkOf(p)
         return el('div', { class: p.playerId === playerId ? 'board-row me' : 'board-row' }, [
           el('span', { class: p.connected ? 'dot on' : 'dot off' }),
           ...(mark !== '' ? [el('span', { class: 'rank-mark', text: mark })] : []),

@@ -3,6 +3,7 @@ import { playCorrect, playLock, playWrong, setSoundEnabled, setSoundVolume, unlo
 import { CONFIG } from '../config.js'
 import { HostGame } from '../game/host-game.js'
 import { PHASE, PHASE_LABEL } from '../game/phases.js'
+import { rankMark } from '../game/rank.js'
 import {
   addQuestion,
   exportPayload,
@@ -24,7 +25,6 @@ import { createTransport } from '../net/transport.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
 import { backdropDismiss, closeX, el, popupOverlay } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
-import { setLeaveGuard } from './leave-guard.js'
 
 export function mountHost(app) {
   unlockAudio() // トップ画面のクリック（ユーザー操作）を起点に AudioContext を有効化
@@ -66,7 +66,7 @@ export function mountHost(app) {
 
   // --- 接続状態（ロビー/進行画面のヘッダーで共用） ---
   const statusDot = el('span', { class: 'dot on' })
-  const statusText = el('span', { class: 'status-text', text: '部屋を公開中' })
+  const statusText = el('span', { class: 'status-text', text: '0人' })
 
   function topbar(extra = []) {
     return el('div', { class: 'topbar' }, [
@@ -130,7 +130,7 @@ export function mountHost(app) {
     game.showQuestion(questionInput.value)
     questionInput.value = ''
   } })
-  const askNextBtn = el('button', { class: 'btn', text: 'セットから次を出題', onclick: () => {
+  const askNextBtn = el('button', { class: 'btn', text: 'セットから出題', onclick: () => {
     const item = nextUnasked(bankItems)
     if (item === null) return
     askFromBank(item)
@@ -140,6 +140,7 @@ export function mountHost(app) {
   const closeAnswersBtn = el('button', { class: 'btn', text: '締め切り', onclick: () => game.closeAnswers() })
 
   const phaseEl = el('span', { class: 'phase-chip', text: PHASE_LABEL[PHASE.WAITING] })
+  const hostQBadge = el('span', { class: 'q-badge ghost', text: '' })
   const currentQuestionEl = el('div', { class: 'question-text question-clamp', text: 'まだ問題がありません' })
   const answerLine = el('p', { class: 'answer-note hidden', text: '' }) // 答え・メモ（出題者の手元のみ）
   const orderList = el('ol', { class: 'order-list' })
@@ -195,18 +196,38 @@ export function mountHost(app) {
     )
   }
 
-  const finishBtn = el('button', { class: 'btn', text: '結果発表', onclick: () => {
+  const finishBtn = el('button', { class: 'btn btn-small', text: '結果発表', onclick: () => {
     if (game.phase === PHASE.FINAL) game.resumeGame()
     else game.finishGame()
   } })
-  const resetScoresBtn = el('button', { class: 'btn btn-ng', text: '得点リセット', onclick: () => game.resetScores() })
+  const resetScoresBtn = el('button', { class: 'btn btn-ng btn-small', text: '得点リセット', onclick: () => game.resetScores() })
 
-  const soundCheck = el('input', { type: 'checkbox' })
-  soundCheck.checked = prefs.sound
-  soundCheck.addEventListener('change', () => {
-    prefs.sound = soundCheck.checked
+  // 端末設定（歯車）: 効果音の音量スライダー。動かし終わりに一鳴らしして確かめられる
+  const volumeSlider = el('input', { type: 'range', min: '0', max: '100', step: '1' })
+  volumeSlider.value = String(Math.round(prefs.volume * 100))
+  volumeSlider.addEventListener('input', () => {
+    prefs.volume = Number(volumeSlider.value) / 100
+    prefs.sound = true
+    setSoundVolume(prefs.volume)
+    setSoundEnabled(true)
+  })
+  volumeSlider.addEventListener('change', () => {
     savePrefs(prefs)
-    setSoundEnabled(prefs.sound)
+    unlockAudio()
+    playLock()
+  })
+  const hostSettingsOverlay = popupOverlay(
+    'settings-overlay',
+    el('div', { class: 'card rules-card' }, [
+      el('h2', { text: '設定' }),
+      el('div', { class: 'settings-row' }, [el('span', { text: '効果音（この端末で鳴らす）' }), volumeSlider]),
+    ]),
+  )
+  const settingsBtn = el('button', {
+    class: 'icon-btn',
+    text: '⚙︎',
+    'aria-label': '設定',
+    onclick: () => hostSettingsOverlay.classList.remove('hidden'),
   })
 
   // --- 進行中の共有オーバーレイ ---
@@ -278,6 +299,20 @@ export function mountHost(app) {
     hostDiagOverlay.classList.remove('hidden')
   } })
 
+  // 接続の補助はルールでなく「共有」（参加のさせ方）の文脈に置く。ロビーにも表示される
+  shareCard.append(
+    el('div', { class: 'settings-row' }, [el('span', { text: '旧端末互換（iOS 12等・マイク許可）' }), legacyCompatBtn]),
+    el('div', { class: 'settings-row' }, [el('span', { text: 'つながらない時に' }), hostDiagBtn]),
+  )
+
+  // この端末が既に実IP候補を出していれば互換モードは不要（候補が集まり次第、表示に反映）
+  function updateCompatButton() {
+    if (!legacyCompatBtn.disabled && transport.usesMdnsCandidates() === false) {
+      legacyCompatBtn.textContent = '不要（実IPが有効）'
+      legacyCompatBtn.disabled = true
+    }
+  }
+
   const teamsSelect = el('select', { class: 'input' }, [
     el('option', { value: '0', text: 'なし（個人戦）' }),
     el('option', { value: '2', text: '2チーム' }),
@@ -318,11 +353,6 @@ export function mountHost(app) {
         el('span', { text: '同名での復帰（得点引き継ぎ）' }),
         nickResumeCheck,
       ]),
-      el('div', { class: 'settings-row' }, [
-        el('span', { text: '旧端末互換（iOS 12等・マイク許可を使用）' }),
-        legacyCompatBtn,
-      ]),
-      el('div', { class: 'settings-row' }, [el('span', { text: 'つながらない時に' }), hostDiagBtn]),
       el('h2', { text: 'ハンデ（押下時刻に加算するms）' }),
       handicapPlaceholder,
       handicapRows,
@@ -330,11 +360,6 @@ export function mountHost(app) {
   )
 
   function openRules() {
-    // この端末が既に実IP候補を出している場合、互換モードは不要
-    if (transport.usesMdnsCandidates() === false) {
-      legacyCompatBtn.textContent = '不要（実IPが有効）'
-      legacyCompatBtn.disabled = true
-    }
     answerModeSelect.value = game.rules.answerMode
     revealSelect.value = game.rules.reveal
     revealSpeedSelect.value = String(game.rules.revealCps)
@@ -502,34 +527,38 @@ export function mountHost(app) {
   } })
 
   // ポップアップは範囲外タップでも閉じる
-  backdropDismiss(shareOverlay, rulesOverlay, bankOverlay, hostDiagOverlay)
+  backdropDismiss(shareOverlay, rulesOverlay, bankOverlay, hostDiagOverlay, hostSettingsOverlay)
 
   // --- 画面: ロビー（参加者集め） → 進行 ---
 
   function showLobby() {
     app.replaceChildren(
       el('div', { class: 'screen host-screen' }, [
-        topbar([rulesBtn]),
+        topbar([rulesBtn, settingsBtn]),
         shareCard,
         scoreCard,
         el('button', { class: 'btn btn-primary btn-big', text: 'クイズを開始', onclick: showGame }),
       ]),
       rulesOverlay,
       hostDiagOverlay,
+      hostSettingsOverlay,
     )
   }
 
   function showGame() {
     app.replaceChildren(
       el('div', { class: 'screen host-screen' }, [
-        topbar([bankBtn, rulesBtn, shareBtn]),
+        topbar([bankBtn, rulesBtn, shareBtn, settingsBtn]),
         el('div', { class: 'card' }, [
           el('h2', { text: '問題' }),
           questionInput,
-          el('div', { class: 'btn-row' }, [showBtn, askNextBtn, armBtn, stopBtn, closeAnswersBtn]),
+          el('div', { class: 'action-grid' }, [showBtn, askNextBtn, armBtn, stopBtn, closeAnswersBtn]),
         ]),
         el('div', { class: 'card' }, [
-          el('div', { class: 'topbar' }, [el('h2', { text: '進行' }), phaseEl]),
+          el('div', { class: 'topbar' }, [
+            el('h2', { text: '進行' }),
+            el('span', { class: 'phase-side' }, [hostQBadge, phaseEl]),
+          ]),
           currentQuestionEl,
           answerLine,
           answersLine,
@@ -539,7 +568,6 @@ export function mountHost(app) {
           el('div', { class: 'btn-row' }, [correctBtn, wrongNextBtn, wrongOpenBtn, wrongTeamBtn]),
           declareRow,
           el('div', { class: 'btn-row' }, [finishBtn, resetScoresBtn]),
-          el('label', { class: 'settings-row' }, [el('span', { text: '効果音（この端末で鳴らす）' }), soundCheck]),
         ]),
         scoreCard,
       ]),
@@ -547,6 +575,7 @@ export function mountHost(app) {
       rulesOverlay,
       bankOverlay,
       hostDiagOverlay,
+      hostSettingsOverlay,
     )
   }
 
@@ -561,17 +590,16 @@ export function mountHost(app) {
     return value
   }
 
-  // 問題文の表示（順次表示ルールでは読み上げ位置までを描画する）
+  // 問題文の表示（順次表示ルールでは読み上げ位置までを描画する）。問題番号は Q バッジが伝える
   function renderQuestionText() {
     if (game.qid === 0) {
       currentQuestionEl.textContent = 'まだ問題がありません'
       return
     }
     if (game.questionText === '') {
-      currentQuestionEl.textContent = `第${game.qid}問（口頭で出題）`
+      currentQuestionEl.textContent = '（口頭で出題）'
       return
     }
-    const prefix = `第${game.qid}問: `
     if (game.rules.reveal === 'serial') {
       let chars = game.revealBase
       if (game.phase === PHASE.ARMED && game.armedAt !== null) {
@@ -579,9 +607,9 @@ export function mountHost(app) {
       }
       const count = Math.min(game.questionText.length, Math.floor(chars))
       currentQuestionEl.textContent =
-        count <= 0 ? `${prefix}（早押し開始で読み上げ）` : prefix + game.questionText.slice(0, count)
+        count <= 0 ? '（早押し開始で読み上げ）' : game.questionText.slice(0, count)
     } else {
-      currentQuestionEl.textContent = prefix + game.questionText
+      currentQuestionEl.textContent = game.questionText
     }
   }
 
@@ -590,10 +618,14 @@ export function mountHost(app) {
     prevPhase = game.phase
 
     const connectedCount = [...game.players.values()].filter((p) => p.connected).length
-    statusText.textContent = `部屋を公開中 · 参加 ${connectedCount}人`
+    statusText.textContent = `${connectedCount}人` // 公開中であることは緑ランプが伝える
+    updateCompatButton()
 
     phaseEl.textContent = PHASE_LABEL[game.phase]
     phaseEl.className = `phase-chip phase-${game.phase}`
+    const badgeVisible = game.qid > 0 && game.phase !== PHASE.FINAL
+    hostQBadge.textContent = badgeVisible ? `Q${game.qid}` : ''
+    hostQBadge.classList.toggle('ghost', !badgeVisible)
     renderQuestionText()
     // 読み上げ中はアニメーションのために定期再描画する
     const revealing = game.rules.reveal === 'serial' && game.phase === PHASE.ARMED
@@ -635,15 +667,12 @@ export function mountHost(app) {
     }
     armBtn.disabled = game.phase !== PHASE.QUESTION
     stopBtn.disabled = game.phase !== PHASE.ARMED && game.phase !== PHASE.LOCKED
+    // 判定ボタンは誰かが押して判定できるときだけ出す（待機中の画面を静かに保つ）
     const canJudge = !mass && game.phase === PHASE.LOCKED && game.activePlayerId !== null
-    correctBtn.disabled = !canJudge
-    wrongNextBtn.disabled = !canJudge
-    wrongOpenBtn.disabled = !canJudge
-    wrongTeamBtn.disabled = !canJudge
-    correctBtn.style.display = mass ? 'none' : ''
-    wrongNextBtn.style.display = mass ? 'none' : ''
-    wrongOpenBtn.style.display = mass ? 'none' : ''
-    wrongTeamBtn.style.display = mass || game.rules.teams === 0 ? 'none' : ''
+    correctBtn.style.display = canJudge ? '' : 'none'
+    wrongNextBtn.style.display = canJudge ? '' : 'none'
+    wrongOpenBtn.style.display = canJudge ? '' : 'none'
+    wrongTeamBtn.style.display = canJudge && game.rules.teams > 0 ? '' : 'none'
 
     // チーム合計（チーム戦のみ）
     if (game.rules.teams > 0) {
@@ -703,9 +732,11 @@ export function mountHost(app) {
         orderList.replaceChildren()
       }
     } else {
-      // 押下順リスト（1位からのms差）
+      // 押下順リスト（1位からのms差）。案内文は受付が始まってからにして待機中を静かに保つ
       answersLine.style.display = 'none'
-      orderPlaceholder.style.display = game.order.length === 0 ? '' : 'none'
+      const orderRelevant =
+        game.phase === PHASE.ARMED || game.phase === PHASE.LOCKED || game.phase === PHASE.RESULT
+      orderPlaceholder.style.display = orderRelevant && game.order.length === 0 ? '' : 'none'
       orderList.replaceChildren(
         ...game.order.map((entry) => {
           const player = game.players.get(entry.playerId)
@@ -731,8 +762,10 @@ export function mountHost(app) {
     scoreRows.replaceChildren(
       ...players.map((p) => {
         const meta = game.rules.teams > 0 ? teamMeta(p.team) : null
+        const mark = rankMark(players, p, game.rules.rankBadges)
         return el('div', { class: 'score-row' }, [
           el('span', { class: p.connected ? 'dot on' : 'dot off' }),
+          ...(mark !== '' ? [el('span', { class: 'rank-mark', text: mark })] : []),
           // タップでチームを順に切り替えられる
           ...(meta !== null
             ? [el('button', {
@@ -750,7 +783,7 @@ export function mountHost(app) {
             : []),
           el('span', {
             class: 'score-rtt',
-            text: p.sync.rtt !== null ? `RTT ${Math.round(p.sync.rtt)}ms` : '',
+            text: p.sync.rtt !== null ? `${Math.round(p.sync.rtt)}ms` : '',
           }),
           el('span', { class: 'score-value', text: String(p.score) }),
           el('button', { class: 'btn btn-mini', text: '−', onclick: () => game.adjustScore(p.sessionId, -1) }),
@@ -762,7 +795,5 @@ export function mountHost(app) {
 
   showLobby()
   render()
-  // 出題者のリロードは部屋の終了を意味するため、以後は常に確認を挟む
-  setLeaveGuard(true)
   transport.join(roomCode).catch(() => {}) // 失敗内容は診断ログに記録済み
 }

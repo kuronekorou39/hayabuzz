@@ -126,6 +126,10 @@ button {
   padding: 10px 14px;
 }
 
+.btn.hidden {
+  display: none;
+}
+
 .btn:disabled {
   opacity: 0.35;
   cursor: default;
@@ -642,6 +646,19 @@ textarea.input {
   width: 22px;
   height: 22px;
   accent-color: var(--primary);
+}
+
+.settings-row input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--primary);
+}
+
+/* 1行に複数のコントロールを並べる（背景のシャッフル+ON/OFF など） */
+.settings-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 /* ボタンの見た目: 縦積みの行 + ミニプレビューのグリッド */

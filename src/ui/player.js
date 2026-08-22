@@ -1,11 +1,11 @@
-import { playBuzz, playCorrect, playWrong, playYourTurn, setSoundEnabled, unlockAudio } from '../audio.js'
+import { playBuzz, playCorrect, playWrong, playYourTurn, setSoundEnabled, setSoundVolume, unlockAudio } from '../audio.js'
 import { CONFIG } from '../config.js'
 import { MASS_PHASE_LABEL, PHASE, PHASE_LABEL } from '../game/phases.js'
 import { MSG, PROTO_VERSION, validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
 import { teamMeta, teamTotals } from '../game/teams.js'
 import { diagText } from '../net/diag.js'
-import { applyBackground } from './background.js'
+import { applyBackground, shuffleBackground } from './background.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
 import { backdropDismiss, el } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
@@ -108,6 +108,7 @@ function startGame(app, roomCode, nick) {
   const transport = createTransport({ role: 'player' })
   const prefs = loadPrefs()
   setSoundEnabled(prefs.sound)
+  setSoundVolume(prefs.volume)
 
   let hostPeerId = null // welcome をくれたピア＝host。以後 host とのみ通信する（スター型）
   let playerId = null
@@ -266,12 +267,19 @@ function startGame(app, roomCode, nick) {
   renderStyleGrid()
   spriteFormatReady.then(renderStyleGrid) // 形式判定後に正しい拡張子で描き直す
 
-  const soundCheck = el('input', { type: 'checkbox' })
-  soundCheck.checked = prefs.sound
-  soundCheck.addEventListener('change', () => {
-    prefs.sound = soundCheck.checked
+  // 効果音は音量スライダー。動かし終わりに一鳴らしして音量を確かめられる
+  const volumeSlider = el('input', { type: 'range', min: '0', max: '100', step: '1' })
+  volumeSlider.value = String(Math.round(prefs.volume * 100))
+  volumeSlider.addEventListener('input', () => {
+    prefs.volume = Number(volumeSlider.value) / 100
+    prefs.sound = true
+    setSoundVolume(prefs.volume)
+    setSoundEnabled(true)
+  })
+  volumeSlider.addEventListener('change', () => {
     savePrefs(prefs)
-    setSoundEnabled(prefs.sound)
+    unlockAudio()
+    playYourTurn()
   })
 
   const backgroundCheck = el('input', { type: 'checkbox' })
@@ -281,14 +289,22 @@ function startGame(app, roomCode, nick) {
     savePrefs(prefs)
     applyBackground(prefs.background)
   })
+  const bgShuffleBtn = el('button', { class: 'btn btn-small', text: 'シャッフル', onclick: () => {
+    if (!prefs.background) {
+      prefs.background = true
+      backgroundCheck.checked = true
+      savePrefs(prefs)
+    }
+    shuffleBackground()
+  } })
 
-  // 接続診断（設定からいつでも見られる）
+  // 接続診断: 接続ステータスが赤のときだけトップバーにヘルプとして出す
   const diagViewText = el('div', { class: 'diag-log' })
   const diagOverlay = el('div', { class: 'overlay diag-overlay hidden' }, [
     el('div', { class: 'card rules-card' }, [el('h2', { text: '接続診断' }), diagViewText]),
     el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => diagOverlay.classList.add('hidden') }),
   ])
-  const diagBtn = el('button', { class: 'btn btn-small', text: '接続診断を表示', onclick: () => {
+  const helpBtn = el('button', { class: 'btn btn-small hidden', text: 'ヘルプ', onclick: () => {
     diagViewText.textContent = diagText(40)
     diagOverlay.classList.remove('hidden')
   } })
@@ -297,9 +313,11 @@ function startGame(app, roomCode, nick) {
     el('div', { class: 'card rules-card' }, [
       el('h2', { text: '設定' }),
       el('div', { class: 'settings-row settings-col' }, [el('span', { text: 'ボタンの見た目' }), styleGrid]),
-      el('label', { class: 'settings-row' }, [el('span', { text: '効果音' }), soundCheck]),
-      el('label', { class: 'settings-row' }, [el('span', { text: '背景' }), backgroundCheck]),
-      el('div', { class: 'settings-row' }, [el('span', { text: 'つながらない時に' }), diagBtn]),
+      el('div', { class: 'settings-row' }, [el('span', { text: '効果音' }), volumeSlider]),
+      el('div', { class: 'settings-row' }, [
+        el('span', { text: '背景' }),
+        el('span', { class: 'settings-controls' }, [bgShuffleBtn, backgroundCheck]),
+      ]),
     ]),
     el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => settingsOverlay.classList.add('hidden') }),
   ])
@@ -344,7 +362,7 @@ function startGame(app, roomCode, nick) {
           el('span', { class: 'brand', text: 'Hayabuzz' }),
           el('span', { class: 'role', text: '回答者' }),
         ]),
-        el('div', { class: 'status' }, [statusDot, statusText, settingsBtn]),
+        el('div', { class: 'status' }, [statusDot, statusText, helpBtn, settingsBtn]),
       ]),
       questionCard,
       buzzer,
@@ -372,6 +390,7 @@ function startGame(app, roomCode, nick) {
   function setStatus(kind, label) {
     statusDot.className = `dot ${kind}`
     statusText.textContent = label
+    helpBtn.classList.toggle('hidden', kind !== 'off') // 赤（切断・未接続）のときだけヘルプを出す
   }
 
   // 画面スリープでの切断を防ぐ（対応端末のみ・失敗は無視）

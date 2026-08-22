@@ -1,5 +1,5 @@
 import QRCode from 'qrcode'
-import { playCorrect, playLock, playWrong, setSoundEnabled, unlockAudio } from '../audio.js'
+import { playCorrect, playLock, playWrong, setSoundEnabled, setSoundVolume, unlockAudio } from '../audio.js'
 import { CONFIG } from '../config.js'
 import { HostGame } from '../game/host-game.js'
 import { PHASE, PHASE_LABEL } from '../game/phases.js'
@@ -31,6 +31,7 @@ export function mountHost(app) {
   unlockAudio() // トップ画面のクリック（ユーザー操作）を起点に AudioContext を有効化
   const prefs = loadPrefs()
   setSoundEnabled(prefs.sound)
+  setSoundVolume(prefs.volume)
   // 問題セット等のブラウザ保存が自動削除されにくいよう永続化を要求（対応ブラウザのみ）
   navigator.storage?.persist?.().catch(() => {})
 

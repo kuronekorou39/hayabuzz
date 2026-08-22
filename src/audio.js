@@ -1,10 +1,16 @@
 // 効果音。AudioContext は必ずユーザー操作を起点に生成・resume する（モバイル対策）。
 let ctx = null
 let enabled = true
+let volume = 1
 
-// 設定の「効果音 ON/OFF」から呼ぶ
+// 出題者の「効果音 ON/OFF」から呼ぶ
 export function setSoundEnabled(value) {
   enabled = value
+}
+
+// 回答者の音量スライダーから呼ぶ（0〜1。0 で無音）
+export function setSoundVolume(value) {
+  volume = Math.min(1, Math.max(0, value))
 }
 
 // 「参加」ボタン等のユーザー操作ハンドラ内から呼ぶこと
@@ -18,13 +24,13 @@ export function unlockAudio() {
   if (ctx.state === 'suspended') ctx.resume()
 }
 
-function beep(freq, durationMs, type, volume = 0.15) {
-  if (!enabled || ctx === null || ctx.state !== 'running') return
+function beep(freq, durationMs, type, baseVolume = 0.15) {
+  if (!enabled || volume <= 0 || ctx === null || ctx.state !== 'running') return
   const osc = ctx.createOscillator()
   const gain = ctx.createGain()
   osc.type = type
   osc.frequency.value = freq
-  gain.gain.setValueAtTime(volume, ctx.currentTime)
+  gain.gain.setValueAtTime(baseVolume * volume, ctx.currentTime)
   gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + durationMs / 1000)
   osc.connect(gain)
   gain.connect(ctx.destination)

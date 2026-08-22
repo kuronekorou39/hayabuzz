@@ -4,8 +4,9 @@ import { randomCode } from '../util/random.js'
 // 問題セット（出題者の端末にのみ保存。P2P には答え・メモを一切流さない）。
 // ブラウザ保存は消えることがある前提で、正本はエクスポートしたファイルとする。
 //
-// 1問のデータ: { id, q, a, memo, history: [{ at, winner }] }
-//   history には出題のたびに { at: 出題日時(epoch ms), winner: 正解者名 | null } が積まれる
+// 1問のデータ: { id, q, a, memo, history: [{ at, winner, wrongs }] }
+//   history には出題のたびに
+//   { at: 出題日時(epoch ms), winner: 正解者名 | null, wrongs: 誤答者名の配列 } が積まれる
 
 const BANK_KEY = 'hayabuzz.questionBank'
 const EXPORTED_KEY = 'hayabuzz.questionBank.exportedAt'
@@ -28,7 +29,13 @@ function sanitizeItem(raw) {
     memo: raw.memo.slice(0, 500),
     history: raw.history
       .filter((h) => typeof h === 'object' && h !== null && typeof h.at === 'number')
-      .map((h) => ({ at: h.at, winner: typeof h.winner === 'string' ? h.winner.slice(0, 30) : null })),
+      .map((h) => ({
+        at: h.at,
+        winner: typeof h.winner === 'string' ? h.winner.slice(0, 30) : null,
+        wrongs: Array.isArray(h.wrongs)
+          ? h.wrongs.filter((w) => typeof w === 'string').map((w) => w.slice(0, 30)).slice(0, 50)
+          : [],
+      })),
   }
 }
 
@@ -74,17 +81,17 @@ export function removeQuestion(items, id) {
   if (index >= 0) items.splice(index, 1)
 }
 
-// 出題時に履歴を積む（結果は判定時に recordWinner で書き込む）
+// 出題時に履歴を積む（結果は判定時に recordOutcome で書き込む）
 export function markAsked(items, id, at) {
   const item = items.find((i) => i.id === id)
-  if (item) item.history.push({ at, winner: null })
+  if (item) item.history.push({ at, winner: null, wrongs: [] })
 }
 
-export function recordWinner(items, id, winner) {
+export function recordOutcome(items, id, winner, wrongs = []) {
   const item = items.find((i) => i.id === id)
   if (!item) return
-  if (item.history.length === 0) item.history.push({ at: Date.now(), winner })
-  else item.history[item.history.length - 1].winner = winner
+  if (item.history.length === 0) item.history.push({ at: Date.now(), winner, wrongs })
+  else Object.assign(item.history[item.history.length - 1], { winner, wrongs })
 }
 
 export function nextUnasked(items) {

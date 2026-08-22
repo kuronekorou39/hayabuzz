@@ -40,6 +40,8 @@ export class HostGame {
     this.answers = new Map() // 一斉回答モードの回答（sessionId → 値。締切まで上書き可）
     this.correctValue = null // 一斉回答モードで発表した正答
     this.lastPingBroadcastAt = 0 // ping 表示更新用の定期配信の絞り
+    // このセッションの出題履歴（host UI の「履歴」で表示。部屋の終了とともに消える）
+    this.askedLog = [] // { qid, text, answer, winners: [nick], wrongs: [nick], decided }
   }
 
   get isMassAnswerMode() {
@@ -188,6 +190,12 @@ export class HostGame {
 
   // ---- host の操作 ----
 
+  // 現在の問題の履歴エントリ（qid が一致する最新のもの）
+  #logEntry() {
+    const entry = this.askedLog[this.askedLog.length - 1]
+    return entry !== undefined && entry.qid === this.qid ? entry : null
+  }
+
   // 新しい問題を表示する（RESULT からの「次の問題」もこの操作）
   showQuestion(text, answer = '') {
     this.questionText = text.trim().slice(0, CONFIG.questionMaxLen)
@@ -203,6 +211,8 @@ export class HostGame {
     this.revealBase = 0 // 読み上げは新しい問題の先頭から
     this.answers.clear()
     this.correctValue = null
+    this.askedLog.push({ qid: this.qid, text: this.questionText, answer: this.answerText, winners: [], wrongs: [], decided: false })
+    if (this.askedLog.length > 200) this.askedLog.shift()
     this.#changed()
   }
 
@@ -231,11 +241,14 @@ export class HostGame {
     if (!this.isMassAnswerMode || this.phase !== PHASE.LOCKED) return
     if (!this.#isValidAnswer(value)) return
     this.correctValue = value
+    const log = this.#logEntry()
     for (const player of this.players.values()) {
       const answer = this.answers.get(player.sessionId)
       if (answer === undefined) continue // 未回答は増減なし
       player.score += answer === value ? this.rules.correctPoints : this.rules.wrongPoints
+      if (log !== null) (answer === value ? log.winners : log.wrongs).push(player.nick)
     }
+    if (log !== null) log.decided = true
     this.phase = PHASE.RESULT
     this.revealBase = this.questionText.length
     this.#changed()
@@ -259,16 +272,24 @@ export class HostGame {
     if (this.phase !== PHASE.LOCKED || this.activePlayerId === null) return
     const player = this.players.get(this.activePlayerId)
     if (player) player.score += this.rules.correctPoints
+    const log = this.#logEntry()
+    if (log !== null && player !== undefined) {
+      log.winners.push(player.nick)
+      log.decided = true
+    }
     this.result = { playerId: this.activePlayerId, correct: true }
     this.phase = PHASE.RESULT
     this.revealBase = this.questionText.length // 決着したので問題文を全文表示する
     this.#changed()
   }
 
-  // 誤答ペナルティ（ルールで 0 以下の得点を設定できる）
+  // 誤答ペナルティ（ルールで 0 以下の得点を設定できる）。履歴にも誤答者として記録する
   #applyWrongPenalty(playerId) {
     const player = this.players.get(playerId)
-    if (player) player.score += this.rules.wrongPoints
+    if (!player) return
+    player.score += this.rules.wrongPoints
+    const log = this.#logEntry()
+    if (log !== null && !log.wrongs.includes(player.nick)) log.wrongs.push(player.nick)
   }
 
   // 不正解: 次点者に権利を回す
@@ -282,6 +303,8 @@ export class HostGame {
     } else {
       // 次点がいない: 正解者なしで結果表示へ
       this.result = { playerId: null, correct: false }
+      const log = this.#logEntry()
+      if (log !== null) log.decided = true
       this.activePlayerId = null
       this.phase = PHASE.RESULT
       this.revealBase = this.questionText.length // 決着したので問題文を全文表示する

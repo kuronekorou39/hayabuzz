@@ -150,6 +150,31 @@ button {
   gap: 8px;
 }
 
+/* 出題履歴（問題・答え・正解者・誤答者） */
+.history-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.history-q {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.history-text {
+  overflow-wrap: anywhere;
+}
+
+.history-meta {
+  margin: 4px 0 0;
+  color: var(--dim);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
 .btn:disabled {
   opacity: 0.35;
   cursor: default;
@@ -1026,7 +1051,9 @@ textarea.input {
   line-height: 1.7;
 }
 
-.overlay .btn {
+/* 接続系オーバーレイの操作ボタンだけ幅を揃える（他のポップアップ内の
+   小ボタンにまで効かせると、一覧の行などを押し潰してしまう） */
+.conn-overlay .btn {
   min-width: 12em;
 }
 

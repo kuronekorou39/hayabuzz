@@ -39,11 +39,26 @@ test('問題セット: 追加→出題→答えの手元表示→正解者名の
   await host.page.getByRole('button', { name: 'セット', exact: true }).click()
   await expect(host.page.locator('.bank-row')).toContainText('たろう')
   await expect(host.page.locator('.bank-row')).toContainText('1回')
+  await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
+
+  // セッションの出題履歴に問題・答え・正解者が残る
+  await host.page.getByRole('button', { name: '履歴', exact: true }).click()
+  await expect(host.page.locator('.history-overlay')).toContainText('富士山の標高は？')
+  await expect(host.page.locator('.history-overlay')).toContainText('答え: 3776m')
+  await expect(host.page.locator('.history-overlay')).toContainText('正解: たろう')
+  await host.page.locator('.history-overlay').getByRole('button', { name: '閉じる' }).click()
+  await host.page.getByRole('button', { name: 'セット', exact: true }).click()
 
   // スプレッドシート形式（タブ区切り）の貼り付け取り込み
   await host.page.locator('.bank-paste').fill('Q2\tA2\nQ3\tA3\tメモ3')
   await host.page.getByRole('button', { name: '取り込み' }).click()
   await expect(host.page.locator('.bank-row')).toHaveCount(3)
+
+  // サンプル20問の取り込み（既存3問 + 20問。再度押しても重複しない）
+  await host.page.getByRole('button', { name: 'サンプル20問を取り込む' }).click()
+  await expect(host.page.locator('.bank-row')).toHaveCount(23)
+  await host.page.getByRole('button', { name: 'サンプル20問を取り込む' }).click()
+  await expect(host.page.locator('.bank-row')).toHaveCount(23)
 
   await p1.context.close()
   await host.context.close()

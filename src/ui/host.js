@@ -13,11 +13,12 @@ import {
   markAsked,
   nextUnasked,
   parseImport,
-  recordWinner,
+  recordOutcome as recordBankOutcome,
   removeQuestion,
   saveBank,
   setExportedAt,
 } from '../game/question-bank.js'
+import { SAMPLE_QUESTIONS } from '../game/sample-questions.js'
 import { teamMeta, teamTotals } from '../game/teams.js'
 import { diagText } from '../net/diag.js'
 import { validateMessage } from '../net/protocol.js'
@@ -146,14 +147,15 @@ export function mountHost(app) {
   const orderList = el('ol', { class: 'order-list' })
   const orderPlaceholder = el('p', { class: 'placeholder', text: 'まだ誰も押していません' })
   const resultLine = el('p', { class: 'result-line hidden', text: '' })
-  // セット問題の判定結果（出題日時と正解者名）を履歴に書き込む
+  // セット問題の判定結果（正解者・誤答者）をセットの履歴に書き込む
   function recordOutcome() {
     if (outcomeRecorded || currentBankId === null) return
-    if (game.phase !== PHASE.RESULT || game.result === null) return
-    const winner = game.result.correct
-      ? (game.players.get(game.result.playerId)?.nick ?? null)
-      : null
-    recordWinner(bankItems, currentBankId, winner)
+    if (game.phase !== PHASE.RESULT) return
+    const last = game.askedLog[game.askedLog.length - 1]
+    const entry = last !== undefined && last.qid === game.qid ? last : null
+    if (entry === null || !entry.decided) return
+    const winner = entry.winners.length > 0 ? entry.winners.join('、').slice(0, 30) : null
+    recordBankOutcome(bankItems, currentBankId, winner, [...entry.wrongs])
     saveBank(bankItems)
     outcomeRecorded = true
   }
@@ -191,6 +193,7 @@ export function mountHost(app) {
         el('button', { class: 'btn btn-ok', text: option.label, onclick: () => {
           playCorrect()
           game.declareCorrect(option.value)
+          recordOutcome() // セットからの出題なら結果をセット履歴にも残す
         } }),
       ),
     )
@@ -201,6 +204,39 @@ export function mountHost(app) {
     else game.finishGame()
   } })
   const resetScoresBtn = el('button', { class: 'btn btn-ng btn-small', text: '得点リセット', onclick: () => game.resetScores() })
+
+  // このセッションの出題履歴（問題・答え・正解者・誤答者）
+  const historyRows = el('div', { class: 'history-rows' })
+  const historyPlaceholder = el('p', { class: 'placeholder', text: 'まだ出題していません' })
+  const historyOverlay = popupOverlay(
+    'history-overlay',
+    el('div', { class: 'card rules-card' }, [el('h2', { text: '出題履歴' }), historyPlaceholder, historyRows]),
+  )
+
+  function renderHistory() {
+    const entries = [...game.askedLog].reverse() // 新しい問題が上
+    historyPlaceholder.style.display = entries.length === 0 ? '' : 'none'
+    historyRows.replaceChildren(
+      ...entries.map((entry) => {
+        const parts = []
+        if (entry.answer !== '') parts.push(`答え: ${entry.answer}`)
+        if (entry.decided) parts.push(entry.winners.length > 0 ? `正解: ${entry.winners.join('、')}` : '正解者なし')
+        if (entry.wrongs.length > 0) parts.push(`誤答: ${entry.wrongs.join('、')}`)
+        return el('div', { class: 'history-row' }, [
+          el('div', { class: 'history-q' }, [
+            el('span', { class: 'q-badge', text: `Q${entry.qid}` }),
+            el('span', { class: 'history-text', text: entry.text !== '' ? entry.text : '（口頭で出題）' }),
+          ]),
+          ...(parts.length > 0 ? [el('p', { class: 'history-meta', text: parts.join(' ／ ') })] : []),
+        ])
+      }),
+    )
+  }
+
+  const historyBtn = el('button', { class: 'btn btn-small', text: '履歴', onclick: () => {
+    renderHistory()
+    historyOverlay.classList.remove('hidden')
+  } })
 
   // 端末設定（歯車）: 効果音の音量スライダー。動かし終わりに一鳴らしして確かめられる
   const volumeSlider = el('input', { type: 'range', min: '0', max: '100', step: '1' })
@@ -441,6 +477,16 @@ export function mountHost(app) {
     }
   } })
 
+  // お試し用のサンプル問題（既に同じ問題文があるものは追加しない）
+  const sampleBtn = el('button', { class: 'btn btn-small', text: 'サンプル20問を取り込む', onclick: () => {
+    for (const sample of SAMPLE_QUESTIONS) {
+      if (bankItems.some((item) => item.q === sample.q)) continue
+      addQuestion(bankItems, sample)
+    }
+    saveBank(bankItems)
+    renderBank()
+  } })
+
   const exportNote = el('p', { class: 'placeholder', text: '' })
   const exportBtn = el('button', { class: 'btn btn-small', text: 'ファイルへエクスポート', onclick: () => {
     const blob = new Blob([exportPayload(bankItems)], { type: 'application/json' })
@@ -517,7 +563,7 @@ export function mountHost(app) {
       bankRows,
       el('div', { class: 'bank-add' }, [bankQInput, bankAInput, bankMemoInput, bankAddBtn]),
       bankPaste,
-      el('div', { class: 'btn-row' }, [bankImportBtn, exportBtn, importLabel]),
+      el('div', { class: 'btn-row' }, [bankImportBtn, exportBtn, importLabel, sampleBtn]),
       exportNote,
     ]),
   )
@@ -527,7 +573,7 @@ export function mountHost(app) {
   } })
 
   // ポップアップは範囲外タップでも閉じる
-  backdropDismiss(shareOverlay, rulesOverlay, bankOverlay, hostDiagOverlay, hostSettingsOverlay)
+  backdropDismiss(shareOverlay, rulesOverlay, bankOverlay, hostDiagOverlay, hostSettingsOverlay, historyOverlay)
 
   // --- 画面: ロビー（参加者集め） → 進行 ---
 
@@ -567,7 +613,7 @@ export function mountHost(app) {
           resultLine,
           el('div', { class: 'btn-row' }, [correctBtn, wrongNextBtn, wrongOpenBtn, wrongTeamBtn]),
           declareRow,
-          el('div', { class: 'btn-row' }, [finishBtn, resetScoresBtn]),
+          el('div', { class: 'btn-row' }, [historyBtn, finishBtn, resetScoresBtn]),
         ]),
         scoreCard,
       ]),
@@ -576,6 +622,7 @@ export function mountHost(app) {
       bankOverlay,
       hostDiagOverlay,
       hostSettingsOverlay,
+      historyOverlay,
     )
   }
 

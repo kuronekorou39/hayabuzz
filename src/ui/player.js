@@ -211,22 +211,52 @@ function startGame(app, roomCode, nick) {
       buzzer.style.setProperty('--base-clip', style.baseClip)
       buzzer.style.setProperty('--cap-clip', style.capClip)
       buzzer.style.setProperty('--cap-w', style.capW)
+      buzzer.style.setProperty('--cap-dx', style.capDx ?? '0%')
+      buzzer.style.setProperty('--cap-dy', style.capDy ?? '0%')
       buzzer.style.setProperty('--glow', style.glow)
     }
     applyBuzzerClasses()
   }
 
-  const styleSelect = el(
-    'select',
-    { class: 'input' },
-    BUZZER_STYLES.map((s) => el('option', { value: s.id, text: s.label })),
-  )
-  styleSelect.value = getBuzzerStyle(prefs.buttonStyle).id
-  styleSelect.addEventListener('change', () => {
-    prefs.buttonStyle = styleSelect.value
-    savePrefs(prefs)
-    applyBuzzerStyle(prefs.buttonStyle)
-  })
+  // スタイル選択: 見て選べるミニプレビューのグリッド
+  const styleGrid = el('div', { class: 'style-grid' })
+
+  function renderStyleGrid() {
+    const currentId = getBuzzerStyle(prefs.buttonStyle).id
+    styleGrid.replaceChildren(
+      ...BUZZER_STYLES.map((style) => {
+        let preview
+        if (style.base === undefined) {
+          preview = el('span', { class: 'swatch-rig swatch-simple', text: '押' })
+        } else {
+          preview = el('span', { class: 'swatch-rig' }, [
+            el('img', { class: 'swatch-base', src: buzzerSprite(style.base), alt: '', draggable: 'false' }),
+            el('img', { class: 'swatch-cap', src: buzzerSprite(style.cap), alt: '', draggable: 'false' }),
+          ])
+          preview.style.setProperty('--base-clip', style.baseClip)
+          preview.style.setProperty('--cap-clip', style.capClip)
+          preview.style.setProperty('--cap-w', style.capW)
+          preview.style.setProperty('--cap-dx', style.capDx ?? '0%')
+          preview.style.setProperty('--cap-dy', style.capDy ?? '0%')
+        }
+        return el('button', {
+          class: style.id === currentId ? 'style-swatch selected' : 'style-swatch',
+          'data-style': style.id,
+          onclick: () => {
+            prefs.buttonStyle = style.id
+            savePrefs(prefs)
+            applyBuzzerStyle(style.id)
+            renderStyleGrid()
+          },
+        }, [
+          preview,
+          el('span', { class: 'swatch-label', text: style.label.split('（')[0] }),
+        ])
+      }),
+    )
+  }
+  renderStyleGrid()
+  spriteFormatReady.then(renderStyleGrid) // 形式判定後に正しい拡張子で描き直す
 
   const soundCheck = el('input', { type: 'checkbox' })
   soundCheck.checked = prefs.sound
@@ -258,7 +288,7 @@ function startGame(app, roomCode, nick) {
   const settingsOverlay = el('div', { class: 'overlay settings-overlay hidden' }, [
     el('div', { class: 'card rules-card' }, [
       el('h2', { text: '設定' }),
-      el('label', { class: 'settings-row' }, [el('span', { text: 'ボタンの見た目' }), styleSelect]),
+      el('div', { class: 'settings-row settings-col' }, [el('span', { text: 'ボタンの見た目' }), styleGrid]),
       el('label', { class: 'settings-row' }, [el('span', { text: '効果音' }), soundCheck]),
       el('label', { class: 'settings-row' }, [el('span', { text: '背景' }), backgroundCheck]),
       el('div', { class: 'settings-row' }, [el('span', { text: 'つながらない時に' }), diagBtn]),

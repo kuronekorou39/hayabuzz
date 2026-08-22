@@ -5,6 +5,7 @@ import { MSG, PROTO_VERSION, validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
 import { teamMeta, teamTotals } from '../game/teams.js'
 import { diagText } from '../net/diag.js'
+import { applyBackground } from './background.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
 import { backdropDismiss, el } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
@@ -235,6 +236,14 @@ function startGame(app, roomCode, nick) {
     setSoundEnabled(prefs.sound)
   })
 
+  const backgroundCheck = el('input', { type: 'checkbox' })
+  backgroundCheck.checked = prefs.background
+  backgroundCheck.addEventListener('change', () => {
+    prefs.background = backgroundCheck.checked
+    savePrefs(prefs)
+    applyBackground(prefs.background)
+  })
+
   // 接続診断（設定からいつでも見られる）
   const diagViewText = el('div', { class: 'diag-log' })
   const diagOverlay = el('div', { class: 'overlay diag-overlay hidden' }, [
@@ -251,6 +260,7 @@ function startGame(app, roomCode, nick) {
       el('h2', { text: '設定' }),
       el('label', { class: 'settings-row' }, [el('span', { text: 'ボタンの見た目' }), styleSelect]),
       el('label', { class: 'settings-row' }, [el('span', { text: '効果音' }), soundCheck]),
+      el('label', { class: 'settings-row' }, [el('span', { text: '背景' }), backgroundCheck]),
       el('div', { class: 'settings-row' }, [el('span', { text: 'つながらない時に' }), diagBtn]),
     ]),
     el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => settingsOverlay.classList.add('hidden') }),

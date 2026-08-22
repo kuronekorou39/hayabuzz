@@ -22,3 +22,4 @@ const ext = () => (webpSupported ? 'webp' : 'jpg')
 
 export const buzzerSprite = (name) => `./buzzer/${name}.${ext()}`
 export const mascotSprite = (name) => `./mascot/${name}.${ext()}`
+export const bgSprite = (index) => `./bg/bg-${index}.${ext()}`

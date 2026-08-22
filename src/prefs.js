@@ -1,6 +1,6 @@
 // 端末ローカルの表示・効果音設定（個人情報は含まない）
 const KEY = 'hayabuzz.prefs'
-const DEFAULTS = { buttonStyle: 'classic', sound: true }
+const DEFAULTS = { buttonStyle: 'classic', sound: true, background: true }
 
 export function loadPrefs() {
   try {

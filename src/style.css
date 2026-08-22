@@ -676,6 +676,7 @@ textarea.input {
 .settings-col {
   flex-direction: column;
   align-items: stretch;
+  margin-bottom: 8px; /* 次の行（効果音）と少し離す */
 }
 
 .style-grid {
@@ -773,9 +774,36 @@ textarea.input {
   padding: 10px 2px 0;
 }
 
+/* 自分の要約: 名前・得点・順位を間隔をあけて並べる */
 .me-summary {
-  font-weight: 700;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
   font-variant-numeric: tabular-nums;
+}
+
+.me-nick {
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.me-score {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.me-rank {
+  white-space: nowrap;
+  color: var(--fg);
+}
+
+.me-sub {
+  color: var(--dim);
+  font-size: 0.82em;
 }
 
 /* 一時表示のトースト（結果・押下順位などの通知） */
@@ -830,7 +858,7 @@ textarea.input {
 }
 
 /* 得点が変わったときのポップ */
-.me-summary.pop {
+.me-score.pop {
   animation: score-pop 0.4s ease-out;
 }
 
@@ -1256,7 +1284,7 @@ textarea.input {
   .toast,
   .question-text.appear,
   .order-row,
-  .me-summary.pop {
+  .me-score.pop {
     animation: none;
   }
 }

@@ -5,7 +5,6 @@ import { MSG, PROTO_VERSION, validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
 import { teamMeta, teamTotals } from '../game/teams.js'
 import { diagText } from '../net/diag.js'
-import { applyBackground, shuffleBackground } from './background.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
 import { backdropDismiss, el, popupOverlay } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
@@ -189,7 +188,16 @@ function startGame(app, roomCode, nick) {
 
   // 下部バー: 自分の所属チーム・得点の要約 + 得点表を開くボタン
   const myTeamChip = el('span', { class: 'team-chip hidden', text: '' })
-  const meSummary = el('span', { class: 'me-summary', text: '—' })
+  // 自分の要約: 名前・得点・順位を離して並べる（1つの文字列だと数字が3種類並んで読みづらい）
+  const meNick = el('span', { class: 'me-nick', text: '' })
+  const meScoreEl = el('span', { class: 'me-score', text: '—' })
+  const meRankMain = el('span', { text: '' })
+  const meRankSub = el('span', { class: 'me-sub', text: '' })
+  const meSummary = el('span', { class: 'me-summary' }, [
+    meNick,
+    meScoreEl,
+    el('span', { class: 'me-rank' }, [meRankMain, meRankSub]),
+  ])
   const boardTotals = el('div', { class: 'team-totals' })
   const boardRows = el('div', { class: 'board-rows' })
   const boardOverlay = popupOverlay(
@@ -282,16 +290,6 @@ function startGame(app, roomCode, nick) {
     playYourTurn()
   })
 
-  const backgroundCheck = el('input', { type: 'checkbox' })
-  backgroundCheck.checked = prefs.background
-  backgroundCheck.addEventListener('change', () => {
-    prefs.background = backgroundCheck.checked
-    savePrefs(prefs)
-    // ON にするたびに別のパターンを引き直す（シャッフル操作を兼ねる）
-    if (prefs.background) shuffleBackground()
-    else applyBackground(false)
-  })
-
   // 接続診断: 接続ステータスが赤のときだけトップバーにヘルプとして出す
   const diagViewText = el('div', { class: 'diag-log' })
   const diagOverlay = popupOverlay(
@@ -309,7 +307,6 @@ function startGame(app, roomCode, nick) {
       el('h2', { text: '設定' }),
       el('div', { class: 'settings-row settings-col' }, [el('span', { text: 'ボタンの見た目' }), styleGrid]),
       el('div', { class: 'settings-row' }, [el('span', { text: '効果音' }), volumeSlider]),
-      el('label', { class: 'settings-row' }, [el('span', { text: '背景' }), backgroundCheck]),
     ]),
   )
   const settingsBtn = el('button', {
@@ -664,11 +661,14 @@ function startGame(app, roomCode, nick) {
     // 自分の得点の要約（得点順の順位）。得点が変わったらポップさせる
     const me = snapshot.players.find((p) => p.playerId === playerId)
     if (me !== undefined) {
-      meSummary.textContent = `${me.score}点 · ${scoreRankOf(me)}位/${snapshot.players.length}人`
+      meNick.textContent = me.nick
+      meScoreEl.textContent = `${me.score}点`
+      meRankMain.textContent = `${scoreRankOf(me)}位`
+      meRankSub.textContent = `/${snapshot.players.length}人`
       if (lastScore !== null && me.score !== lastScore) {
-        meSummary.classList.remove('pop')
-        void meSummary.offsetWidth
-        meSummary.classList.add('pop')
+        meScoreEl.classList.remove('pop')
+        void meScoreEl.offsetWidth
+        meScoreEl.classList.add('pop')
       }
       lastScore = me.score
       // 所属チームの表示
@@ -680,7 +680,10 @@ function startGame(app, roomCode, nick) {
         myTeamChip.className = 'team-chip hidden'
       }
     } else {
-      meSummary.textContent = '—'
+      meNick.textContent = ''
+      meScoreEl.textContent = '—'
+      meRankMain.textContent = ''
+      meRankSub.textContent = ''
     }
 
     // 得点表（オーバーレイの中身。開いたときに最新になるよう常に更新しておく）

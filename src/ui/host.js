@@ -23,7 +23,6 @@ import { validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
 import { backdropDismiss, closeX, el, popupOverlay } from '../util/dom.js'
-import { applyBackground, shuffleBackground } from './background.js'
 import { randomCode } from '../util/random.js'
 import { setLeaveGuard } from './leave-guard.js'
 
@@ -208,16 +207,6 @@ export function mountHost(app) {
     prefs.sound = soundCheck.checked
     savePrefs(prefs)
     setSoundEnabled(prefs.sound)
-  })
-
-  const backgroundCheck = el('input', { type: 'checkbox' })
-  backgroundCheck.checked = prefs.background
-  backgroundCheck.addEventListener('change', () => {
-    prefs.background = backgroundCheck.checked
-    savePrefs(prefs)
-    // ON にするたびに別のパターンを引き直す（シャッフル操作を兼ねる）
-    if (prefs.background) shuffleBackground()
-    else applyBackground(false)
   })
 
   // --- 進行中の共有オーバーレイ ---
@@ -551,7 +540,6 @@ export function mountHost(app) {
           declareRow,
           el('div', { class: 'btn-row' }, [finishBtn, resetScoresBtn]),
           el('label', { class: 'settings-row' }, [el('span', { text: '効果音（この端末で鳴らす）' }), soundCheck]),
-          el('label', { class: 'settings-row' }, [el('span', { text: '背景（この端末の表示）' }), backgroundCheck]),
         ]),
         scoreCard,
       ]),

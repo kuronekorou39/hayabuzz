@@ -7,11 +7,18 @@ test('基本フロー: 参加→出題→早押し→正解→再接続→部屋
   const p1 = await joinPlayer(browser, host.code, 'たろう')
   await expect(host.page.locator('.score-nick', { hasText: 'たろう' })).toBeVisible()
 
-  // ゲーム進行中でも「共有」からルームコードとQRを表示できる（途中参加者向け）
+  // ゲーム進行中でも「共有」からルームコードとQRを表示できる（途中参加者向け）。
+  // ポップアップは範囲外タップで閉じられる
   await host.page.getByRole('button', { name: '共有' }).click()
   await expect(host.page.locator('.share-overlay .room-code')).toHaveText(host.code)
-  await host.page.locator('.share-overlay').getByRole('button', { name: '閉じる' }).click()
+  await host.page.locator('.share-overlay').click({ position: { x: 10, y: 10 } })
   await expect(host.page.locator('.share-overlay')).toBeHidden()
+
+  // 回答者の設定もポップアップで開き、範囲外タップで閉じる
+  await p1.page.getByRole('button', { name: '設定' }).click()
+  await expect(p1.page.locator('.settings-overlay')).toBeVisible()
+  await p1.page.locator('.settings-overlay').click({ position: { x: 10, y: 10 } })
+  await expect(p1.page.locator('.settings-overlay')).toBeHidden()
 
   await askAndArm(host, '日本の首都は？')
   await expect(p1.page.locator('.question-text')).toContainText('日本の首都は？')

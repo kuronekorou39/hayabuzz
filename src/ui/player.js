@@ -6,7 +6,7 @@ import { createTransport } from '../net/transport.js'
 import { teamMeta, teamTotals } from '../game/teams.js'
 import { diagText } from '../net/diag.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
-import { el } from '../util/dom.js'
+import { backdropDismiss, el } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
 import { BUZZER_STYLES, getBuzzerStyle } from './buzzer-styles.js'
 import { buzzerSprite, spriteFormatReady } from './sprites.js'
@@ -246,15 +246,19 @@ function startGame(app, roomCode, nick) {
     diagOverlay.classList.remove('hidden')
   } })
 
-  const settingsCard = el('div', { class: 'card settings-card hidden' }, [
-    el('label', { class: 'settings-row' }, [el('span', { text: 'ボタンの見た目' }), styleSelect]),
-    el('label', { class: 'settings-row' }, [el('span', { text: '効果音' }), soundCheck]),
-    el('div', { class: 'settings-row' }, [el('span', { text: 'つながらない時に' }), diagBtn]),
+  const settingsOverlay = el('div', { class: 'overlay settings-overlay hidden' }, [
+    el('div', { class: 'card rules-card' }, [
+      el('h2', { text: '設定' }),
+      el('label', { class: 'settings-row' }, [el('span', { text: 'ボタンの見た目' }), styleSelect]),
+      el('label', { class: 'settings-row' }, [el('span', { text: '効果音' }), soundCheck]),
+      el('div', { class: 'settings-row' }, [el('span', { text: 'つながらない時に' }), diagBtn]),
+    ]),
+    el('button', { class: 'btn btn-primary', text: '閉じる', onclick: () => settingsOverlay.classList.add('hidden') }),
   ])
   const settingsBtn = el('button', {
     class: 'btn btn-small',
     text: '設定',
-    onclick: () => settingsCard.classList.toggle('hidden'),
+    onclick: () => settingsOverlay.classList.remove('hidden'),
   })
 
   // --- 接続オーバーレイ（接続中/エラー/部屋終了の全画面表示） ---
@@ -294,7 +298,6 @@ function startGame(app, roomCode, nick) {
         ]),
         el('div', { class: 'status' }, [statusDot, statusText, settingsBtn]),
       ]),
-      settingsCard,
       phaseEl,
       questionEl,
       buzzer,
@@ -302,11 +305,14 @@ function startGame(app, roomCode, nick) {
       bottomBar,
     ]),
     overlay,
+    settingsOverlay,
     boardOverlay,
     finalOverlay,
     diagOverlay,
     toastBox,
   )
+  // ポップアップは範囲外タップでも閉じる（接続系と結果発表は除く）
+  backdropDismiss(settingsOverlay, boardOverlay, diagOverlay)
   applyBuzzerStyle(prefs.buttonStyle)
   // WebP 非対応ブラウザの判定が済んだら正しい形式で当て直す
   spriteFormatReady.then(() => applyBuzzerStyle(prefs.buttonStyle))

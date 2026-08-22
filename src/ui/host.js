@@ -22,7 +22,7 @@ import { diagText } from '../net/diag.js'
 import { validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
-import { el } from '../util/dom.js'
+import { backdropDismiss, el } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
 
 export function mountHost(app) {
@@ -491,6 +491,9 @@ export function mountHost(app) {
     renderBank()
     bankOverlay.classList.remove('hidden')
   } })
+
+  // ポップアップは範囲外タップでも閉じる
+  backdropDismiss(shareOverlay, rulesOverlay, bankOverlay, hostDiagOverlay)
 
   // --- 画面: ロビー（参加者集め） → 進行 ---
 

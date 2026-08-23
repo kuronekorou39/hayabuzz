@@ -94,10 +94,6 @@ export function recordOutcome(items, id, winner, wrongs = []) {
   else Object.assign(item.history[item.history.length - 1], { winner, wrongs })
 }
 
-export function nextUnasked(items) {
-  return items.find((item) => item.history.length === 0) ?? null
-}
-
 // ---- ファイルへのエクスポート / 復元 ----
 
 export function exportPayload(items) {

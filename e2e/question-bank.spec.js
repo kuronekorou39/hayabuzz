@@ -12,19 +12,23 @@ test('問題セット: 追加→出題→答えの手元表示→正解者名の
   await host.page.locator('.bank-memo-input').fill('メートル単位で回答')
   await host.page.getByRole('button', { name: '追加' }).click()
   await expect(host.page.locator('.bank-row')).toHaveCount(1)
-  await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
 
-  // セットから出題 → player に問題文が配信され、host には答え・メモが手元表示される
-  await host.page.getByRole('button', { name: 'セットから出題' }).click()
+  // セット一覧から選んで出題 → player に問題文が配信され、host には答え・メモが手元表示される
+  await host.page.locator('.bank-row').getByRole('button', { name: '出題' }).click()
   await expect(p1.page.locator('.question-text')).toContainText('富士山の標高は？')
   await expect(p1.page.locator('.q-badge')).toHaveText('Q1')
   await expect(host.page.locator('.answer-note')).toContainText('答え: 3776m')
   await expect(host.page.locator('.answer-note')).toContainText('メートル単位で回答')
+  // 出題中の問題文は入力欄に残る（編集はできない）
+  await expect(host.page.locator('.question-input')).toHaveValue('富士山の標高は？')
+  await expect(host.page.locator('.question-input')).toBeDisabled()
   // player 側には答えは一切表示されない（DOM 全体に含まれない）
   await expect(p1.page.locator('body')).not.toContainText('3776m')
 
-  // 未出題の問題がなくなったので「セットから出題」は消える
-  await expect(host.page.getByRole('button', { name: 'セットから出題' })).toBeHidden()
+  // 出題中はセットから選び直せない
+  await host.page.getByRole('button', { name: 'セット', exact: true }).click()
+  await expect(host.page.locator('.bank-row').getByRole('button', { name: '出題' })).toBeDisabled()
+  await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
 
   // 判定まで進めると出題履歴に正解者名が残る
   await host.page.waitForTimeout(2200)

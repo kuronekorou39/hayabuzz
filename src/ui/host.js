@@ -11,7 +11,6 @@ import {
   importTsv,
   loadBank,
   markAsked,
-  nextUnasked,
   parseImport,
   recordOutcome as recordBankOutcome,
   removeQuestion,
@@ -129,13 +128,9 @@ export function mountHost(app) {
   const showBtn = el('button', { class: 'btn btn-primary', text: '問題を表示', onclick: () => {
     currentBankId = null // 手入力の出題はセットと紐付けない
     game.showQuestion(questionInput.value)
-    questionInput.value = ''
   } })
-  const askNextBtn = el('button', { class: 'btn', text: 'セットから出題', onclick: () => {
-    const item = nextUnasked(bankItems)
-    if (item === null) return
-    askFromBank(item)
-  } })
+  // 誤って表示したときの取り消し（出題前に戻して問題文を編集できるようにする）
+  const cancelBtn = el('button', { class: 'btn', text: '取り消し', onclick: () => game.cancelQuestion() })
   const armBtn = el('button', { class: 'btn btn-arm', text: '早押し開始', onclick: () => game.arm() })
   const stopBtn = el('button', { class: 'btn', text: '受付停止', onclick: () => game.stop() })
   const closeAnswersBtn = el('button', { class: 'btn', text: '締め切り', onclick: () => game.closeAnswers() })
@@ -477,13 +472,18 @@ export function mountHost(app) {
   }
 
   // --- 問題セット（出題者の端末にのみ保存。正本はエクスポートしたファイル） ---
+  // セットから出題できるのは、手入力と同じく出題前と判定後だけ
+  function canAskNow() {
+    return game.phase === PHASE.WAITING || game.phase === PHASE.RESULT
+  }
+
   function askFromBank(item) {
-    if (game.phase === PHASE.ARMED || game.phase === PHASE.LOCKED) return // 進行中の問題を壊さない
+    if (!canAskNow()) return // 進行中の問題を壊さない
     currentBankId = item.id
     outcomeRecorded = false
     markAsked(bankItems, item.id, Date.now())
     saveBank(bankItems)
-    questionInput.value = ''
+    questionInput.value = item.q // 出題中の問題文は入力欄に表示したままにする
     game.showQuestion(item.q, item.a) // 答えは判定結果のときに全員へ表示される
     bankOverlay.classList.add('hidden')
   }
@@ -508,6 +508,7 @@ export function mountHost(app) {
 
   const bankRows = el('div', { class: 'bank-rows' })
   const bankPlaceholder = el('p', { class: 'placeholder', text: 'まだ問題がありません。下で追加するか、貼り付け取り込みが使えます。' })
+  const bankNote = el('p', { class: 'placeholder', text: '出題中は選べません（判定を終えるか、取り消してください）' })
 
   const bankPaste = el('textarea', {
     class: 'input bank-paste',
@@ -578,6 +579,8 @@ export function mountHost(app) {
 
   function renderBank() {
     bankPlaceholder.style.display = bankItems.length === 0 ? '' : 'none'
+    const askable = canAskNow()
+    bankNote.style.display = askable ? 'none' : ''
     bankRows.replaceChildren(
       ...bankItems.map((item) =>
         el('div', { class: 'bank-row' }, [
@@ -585,7 +588,12 @@ export function mountHost(app) {
             el('span', { class: 'bank-q', text: item.q }),
             el('span', { class: 'bank-meta', text: `${item.a !== '' ? `答え: ${item.a} · ` : ''}${formatAskedMeta(item)}` }),
           ]),
-          el('button', { class: 'btn btn-mini', text: '出題', onclick: () => askFromBank(item) }),
+          el('button', {
+            class: 'btn btn-mini',
+            text: '出題',
+            disabled: !askable,
+            onclick: () => askFromBank(item),
+          }),
           el('button', { class: 'btn btn-mini', text: '削除', onclick: () => {
             removeQuestion(bankItems, item.id)
             saveBank(bankItems)
@@ -605,6 +613,7 @@ export function mountHost(app) {
     'bank-overlay',
     el('div', { class: 'card rules-card' }, [
       el('h2', { text: '問題セット' }),
+      bankNote,
       bankPlaceholder,
       bankRows,
       el('div', { class: 'bank-add' }, [bankQInput, bankAInput, bankMemoInput, bankAddBtn]),
@@ -672,9 +681,14 @@ export function mountHost(app) {
 
   // 問題文の表示（順次表示ルールでは読み上げ位置までを描画する）。問題番号は Q バッジが伝える
   function renderQuestionText() {
-    // 出題前は入力欄だけでよい（「まだ問題がありません」は情報を増やさない）
-    currentQuestionEl.style.display = game.qid === 0 ? 'none' : ''
-    if (game.qid === 0) return
+    // 問題文は基本的に入力欄が持っている。ここに出すのは入力欄では分からないとき、
+    // すなわち「読み上げがどこまで公開されたか」と「判定後に入力欄を空にした後」
+    const serialProgress =
+      game.rules.reveal === 'serial' &&
+      (game.phase === PHASE.QUESTION || game.phase === PHASE.ARMED || game.phase === PHASE.LOCKED)
+    const visible = game.qid > 0 && game.phase !== PHASE.FINAL && (serialProgress || game.phase === PHASE.RESULT)
+    currentQuestionEl.style.display = visible ? '' : 'none'
+    if (!visible) return
     if (game.questionText === '') {
       currentQuestionEl.textContent = '（口頭で出題）'
       return
@@ -694,6 +708,9 @@ export function mountHost(app) {
 
   function render() {
     if (game.phase === PHASE.LOCKED && prevPhase !== PHASE.LOCKED) playLock()
+    // 判定が終わったら入力欄を空にして次の問題を受け付ける
+    // （取り消しで WAITING に戻った場合は編集して出し直せるよう問題文を残す）
+    if (game.phase === PHASE.RESULT && prevPhase !== PHASE.RESULT) questionInput.value = ''
     prevPhase = game.phase
 
     const connectedCount = [...game.players.values()].filter((p) => p.connected).length
@@ -717,26 +734,24 @@ export function mountHost(app) {
     }
 
     const mass = game.isMassAnswerMode
-    // 出題できるのは進行中でないときだけ（受付中・判定中に出すと進行中の問題を壊す。
-    // 仕切り直したいときは「受付停止」で一旦戻す）
-    const canAsk = game.phase !== PHASE.ARMED && game.phase !== PHASE.LOCKED && game.phase !== PHASE.FINAL
+    // 出題できるのは出題前と判定後だけ。表示中・受付中・判定中に出し直すと
+    // 進行中の問題を壊すため、「取り消し」や「受付停止」で戻してから出し直す
+    const canAsk = game.phase === PHASE.WAITING || game.phase === PHASE.RESULT
     showBtn.textContent = game.phase === PHASE.RESULT ? '次の問題を表示' : '問題を表示'
     armBtn.textContent = mass ? '回答受付開始' : '早押し開始'
     finishBtn.textContent = game.phase === PHASE.FINAL ? 'ゲームに戻る' : '結果発表'
 
     // その時点で押せるボタンだけを並べる（非活性のボタンは並べない）
     const actions = []
-    if (canAsk) {
-      actions.push(showBtn)
-      if (nextUnasked(bankItems) !== null) actions.push(askNextBtn)
-    }
-    if (game.phase === PHASE.QUESTION) actions.push(armBtn)
+    if (canAsk) actions.push(showBtn)
+    if (game.phase === PHASE.QUESTION) actions.push(armBtn, cancelBtn)
     if (mass && game.phase === PHASE.ARMED) actions.push(closeAnswersBtn)
     if (!mass && (game.phase === PHASE.ARMED || game.phase === PHASE.LOCKED)) actions.push(stopBtn)
     actionRow.replaceChildren(...actions)
     actionRow.style.display = actions.length === 0 ? 'none' : ''
-    // 問題の入力欄は出題できるときだけ（進行中は結果や押下順に集中させる）
-    questionInput.style.display = canAsk ? '' : 'none'
+    // 問題文は入力欄に表示したまま、出題中は編集できないようにする
+    questionInput.style.display = game.phase === PHASE.FINAL ? 'none' : ''
+    questionInput.disabled = !canAsk
 
     // 一斉回答の正答宣言は締め切り後だけ
     const canDeclare = mass && game.phase === PHASE.LOCKED

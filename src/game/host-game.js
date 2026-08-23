@@ -216,6 +216,19 @@ export class HostGame {
     this.#changed()
   }
 
+  // 表示した問題を引っ込めて出題前に戻す（誤って表示したときの取り消し）。
+  // 問題番号と履歴も巻き戻すので、次の出題は同じ番号から始まる
+  cancelQuestion() {
+    if (this.phase !== PHASE.QUESTION) return
+    if (this.#logEntry() !== null) this.askedLog.pop()
+    this.qid -= 1
+    this.questionText = ''
+    this.answerText = ''
+    this.revealBase = 0
+    this.phase = PHASE.WAITING
+    this.#changed()
+  }
+
   // 早押し受付を開始。armedAt（host 時刻）が state に載り、これより前の押下は無効。
   // 順次表示ルールでは読み上げもここから（revealBase の続きから）流れる
   arm() {

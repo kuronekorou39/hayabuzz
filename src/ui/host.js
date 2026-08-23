@@ -286,7 +286,10 @@ export function mountHost(app) {
     el('option', { value: 'all', text: '一括で表示' }),
     el('option', { value: 'serial', text: '順次表示（読み上げ）' }),
   ])
-  revealSelect.addEventListener('change', () => game.setReveal(revealSelect.value))
+  revealSelect.addEventListener('change', () => {
+    game.setReveal(revealSelect.value)
+    syncRuleRows() // 読み上げ速度の行の表示/非表示を追従させる
+  })
 
   const revealSpeedSelect = el('select', { class: 'input' }, [
     el('option', { value: '4', text: 'ゆっくり' }),
@@ -296,8 +299,8 @@ export function mountHost(app) {
   revealSpeedSelect.addEventListener('change', () => game.setRevealCps(Number(revealSpeedSelect.value)))
 
   const pressSoundSelect = el('select', { class: 'input' }, [
-    el('option', { value: 'winner', text: '回答権を得た人だけ鳴る' }),
-    el('option', { value: 'all', text: '押した全員に鳴る' }),
+    el('option', { value: 'winner', text: '回答権を得た人だけ' }),
+    el('option', { value: 'all', text: '押した全員' }),
   ])
   pressSoundSelect.addEventListener('change', () => game.setPressSound(pressSoundSelect.value))
 
@@ -372,30 +375,39 @@ export function mountHost(app) {
 
   const handicapRows = el('div', { class: 'score-rows' })
   const handicapPlaceholder = el('p', { class: 'placeholder', text: 'まだ参加者がいません' })
+
+  // 読み上げ速度は「順次表示」を選んだときだけ意味を持つ
+  const revealSpeedRow = el('label', { class: 'settings-row' }, [el('span', { text: '読み上げ速度' }), revealSpeedSelect])
+  function syncRuleRows() {
+    revealSpeedRow.style.display = game.rules.reveal === 'serial' ? '' : 'none'
+  }
+
+  // よく触る基本項目と、細かい詳細項目（折りたたみ）に分ける
   const rulesOverlay = popupOverlay(
     'rules-overlay',
     el('div', { class: 'card rules-card' }, [
       el('h2', { text: 'ルール設定' }),
       el('label', { class: 'settings-row' }, [el('span', { text: '回答形式' }), answerModeSelect]),
       el('label', { class: 'settings-row' }, [el('span', { text: '問題の表示' }), revealSelect]),
-      el('label', { class: 'settings-row' }, [el('span', { text: '読み上げ速度' }), revealSpeedSelect]),
-      el('label', { class: 'settings-row' }, [el('span', { text: '押下音' }), pressSoundSelect]),
+      revealSpeedRow,
       el('label', { class: 'settings-row' }, [el('span', { text: '正解の得点' }), correctPointsSelect]),
       el('label', { class: 'settings-row' }, [el('span', { text: '誤答の得点' }), wrongPointsSelect]),
-      el('label', { class: 'settings-row' }, [el('span', { text: '勝ち抜けライン' }), winScoreSelect]),
-      el('label', { class: 'settings-row' }, [el('span', { text: '得点表の順位マーク' }), rankBadgesSelect]),
       el('label', { class: 'settings-row' }, [el('span', { text: 'チーム戦' }), teamsSelect, shuffleBtn]),
-      el('label', { class: 'settings-row' }, [
-        el('span', { text: '同名での復帰（得点引き継ぎ）' }),
-        nickResumeCheck,
+      el('details', { class: 'rules-advanced' }, [
+        el('summary', { text: '詳細設定' }),
+        el('label', { class: 'settings-row' }, [el('span', { text: '押下音' }), pressSoundSelect]),
+        el('label', { class: 'settings-row' }, [el('span', { text: '勝ち抜けライン' }), winScoreSelect]),
+        el('label', { class: 'settings-row' }, [el('span', { text: '順位マーク' }), rankBadgesSelect]),
+        el('label', { class: 'settings-row' }, [el('span', { text: '同名での復帰（得点引き継ぎ）' }), nickResumeCheck]),
+        el('h2', { text: 'ハンデ（押下時刻に加算するms）' }),
+        handicapPlaceholder,
+        handicapRows,
       ]),
-      el('h2', { text: 'ハンデ（押下時刻に加算するms）' }),
-      handicapPlaceholder,
-      handicapRows,
     ]),
   )
 
   function openRules() {
+    syncRuleRows()
     answerModeSelect.value = game.rules.answerMode
     revealSelect.value = game.rules.reveal
     revealSpeedSelect.value = String(game.rules.revealCps)

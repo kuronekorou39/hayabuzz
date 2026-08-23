@@ -678,12 +678,13 @@ textarea.input {
 .settings-row > span {
   color: var(--dim);
   font-size: 0.9rem;
-  white-space: nowrap;
+  text-align: left; /* 長いラベルは折り返す（横スクロールを出さない） */
 }
 
 .settings-row select.input {
   width: auto;
   flex: 1;
+  min-width: 0; /* 長い選択肢があっても行を押し広げない */
   padding: 8px 10px;
 }
 
@@ -1067,6 +1068,35 @@ textarea.input {
   width: min(92vw, 360px);
   max-height: 70vh;
   overflow-y: auto;
+  overflow-x: hidden; /* 縦スクロール指定に伴う横スクロールバーを出さない */
+}
+
+/* ルール設定の「詳細設定」（折りたたみ） */
+.rules-advanced {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  text-align: left;
+}
+
+.rules-advanced summary {
+  cursor: pointer;
+  color: var(--dim);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rules-advanced > * + * {
+  margin-top: 12px; /* details 内は flex gap が効かないため margin で間隔を取る */
+}
+
+/* 詳細内の見出し（ハンデ等）はカードの小見出しと同じ控えめな見た目にする */
+.overlay .rules-advanced h2 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--dim);
+  letter-spacing: 0.06em;
 }
 
 .handicap-row {

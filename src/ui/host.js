@@ -83,13 +83,12 @@ export function mountHost(app) {
   const urlInput = el('input', { class: 'input url-input', type: 'text', readonly: true, value: joinUrl })
   const copyBtn = el('button', { class: 'btn btn-small', text: 'コピー', onclick: copyUrl })
   const qrCanvas = el('canvas', { class: 'qr' })
-  const shareCount = el('p', { class: 'share-count', text: '参加 0人' })
   const shareCard = el('div', { class: 'card share-card' }, [
     el('h2', { text: 'ルームコード' }),
     el('div', { class: 'room-code', text: roomCode }),
     el('div', { class: 'url-row' }, [urlInput, copyBtn]),
     el('div', { class: 'qr-wrap' }, [qrCanvas]),
-    shareCount,
+    el('p', { class: 'share-note', text: '回答者はQRコードを読み取るか、このURLを開くと参加できます' }),
   ])
 
   QRCode.toCanvas(qrCanvas, joinUrl, { width: 168, margin: 2 }).catch(() => {
@@ -667,7 +666,6 @@ export function mountHost(app) {
 
     const connectedCount = [...game.players.values()].filter((p) => p.connected).length
     statusText.textContent = `${connectedCount}人` // 公開中であることは緑ランプが伝える
-    shareCount.textContent = `参加 ${connectedCount}人`
     updateCompatButton()
 
     phaseEl.textContent = PHASE_LABEL[game.phase]

@@ -1058,11 +1058,12 @@ textarea.input {
   min-width: 12em;
 }
 
-/* 共有カードの参加人数（QRを見せながら集まり具合が分かるように） */
-.share-count {
+/* 共有カードの案内文（参加のしかた） */
+.share-note {
   margin: 0;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  color: var(--dim);
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
 .overlay .share-card {

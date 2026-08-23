@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+﻿import { expect, test } from '@playwright/test'
 import { askAndArm, createRoom, joinPlayer, pressBuzzer } from './helpers.js'
 
 const LONG_QUESTION =
@@ -92,7 +92,7 @@ test('同名復帰ルールを無効にすると、同名でも別プレイヤ�
   const host = await createRoom(browser)
 
   await host.page.getByRole('button', { name: 'ルール' }).click()
-  await host.page.locator('.rules-advanced summary').click() // 折りたたみの詳細設定を開く
+  await host.page.locator('.rules-overlay .rules-advanced summary').click() // 折りたたみの詳細設定を開く
   await host.page.locator('.settings-row', { hasText: '同名での復帰' }).locator('input').uncheck()
   await host.page.locator('.rules-overlay').getByRole('button', { name: '閉じる' }).click()
 

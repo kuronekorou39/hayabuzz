@@ -1,4 +1,4 @@
-import { devices, expect, test } from '@playwright/test'
+﻿import { devices, expect, test } from '@playwright/test'
 import { askAndArm, createRoom, joinPlayer, pressBuzzer } from './helpers.js'
 
 // 全員の buzz を host に届かせる「同時押し」の再現。
@@ -98,7 +98,7 @@ test('複数端末: 3人参加（1人はスマホ）で押下順・次点・再�
 
   // --- ルール: ハンデを付けた player は同時押しでも順位が下がる ---
   await host.page.getByRole('button', { name: 'ルール' }).click()
-  await host.page.locator('.rules-advanced summary').click() // 折りたたみの詳細設定を開く
+  await host.page.locator('.rules-overlay .rules-advanced summary').click() // 折りたたみの詳細設定を開く
   const handicapInput = host.page.locator('.handicap-row', { hasText: 'たろう' }).locator('input')
   await handicapInput.fill('1000')
   await handicapInput.blur()

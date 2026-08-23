@@ -90,7 +90,6 @@ export function mountHost(app) {
     el('div', { class: 'url-row' }, [urlInput, copyBtn]),
     el('div', { class: 'qr-wrap' }, [qrCanvas]),
     shareCount,
-    el('p', { class: 'placeholder', text: 'QRコードの読み取りか、URLの共有で参加できます。参加はいつでも受け付けます（この画面は「共有」からいつでも開けます）' }),
   ])
 
   QRCode.toCanvas(qrCanvas, joinUrl, { width: 168, margin: 2 }).catch(() => {
@@ -254,13 +253,11 @@ export function mountHost(app) {
     unlockAudio()
     playLock()
   })
-  const hostSettingsOverlay = popupOverlay(
-    'settings-overlay',
-    el('div', { class: 'card rules-card' }, [
-      el('h2', { text: '設定' }),
-      el('div', { class: 'settings-row' }, [el('span', { text: '効果音（この端末で鳴らす）' }), volumeSlider]),
-    ]),
-  )
+  const hostSettingsCard = el('div', { class: 'card rules-card' }, [
+    el('h2', { text: '設定' }),
+    el('div', { class: 'settings-row' }, [el('span', { text: '効果音（この端末で鳴らす）' }), volumeSlider]),
+  ])
+  const hostSettingsOverlay = popupOverlay('settings-overlay', hostSettingsCard)
   const settingsBtn = el('button', {
     class: 'icon-btn',
     text: '⚙︎',
@@ -333,15 +330,21 @@ export function mountHost(app) {
     'diag-overlay',
     el('div', { class: 'card rules-card' }, [el('h2', { text: '接続診断' }), hostDiagText]),
   )
-  const hostDiagBtn = el('button', { class: 'btn btn-small', text: '接続診断を表示', onclick: () => {
+  const hostDiagBtn = el('button', { class: 'btn btn-small', text: '表示', onclick: () => {
     hostDiagText.textContent = diagText(40)
     hostDiagOverlay.classList.remove('hidden')
   } })
 
-  // 接続の補助はルールでなく「共有」（参加のさせ方）の文脈に置く。ロビーにも表示される
-  shareCard.append(
-    el('div', { class: 'settings-row' }, [el('span', { text: '旧端末互換（iOS 12等・マイク許可）' }), legacyCompatBtn]),
-    el('div', { class: 'settings-row' }, [el('span', { text: 'つながらない時に' }), hostDiagBtn]),
+  // 接続まわりの補助は普段は不要なので、端末設定（歯車）の詳細設定に畳んでおく
+  hostSettingsCard.append(
+    el('details', { class: 'rules-advanced' }, [
+      el('summary', { text: 'つながらない時は' }),
+      el('div', { class: 'settings-row' }, [el('span', { text: '接続診断' }), hostDiagBtn]),
+      el('div', { class: 'settings-row' }, [
+        el('span', { text: 'この端末が iOS 12 等の旧機種のとき（マイク許可で接続候補を出す）' }),
+        legacyCompatBtn,
+      ]),
+    ]),
   )
 
   // この端末が既に実IP候補を出していれば互換モードは不要（候補が集まり次第、表示に反映）

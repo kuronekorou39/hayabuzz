@@ -131,6 +131,51 @@ button {
   display: none;
 }
 
+/* ルールバー: 問題カードの上に置く横長ボタン。現在のルールを要約表示する */
+.rule-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rule-label {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #9db8ff;
+  background: rgba(90, 140, 255, 0.16);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+/* 収まらない分は末尾を省略（左ほど重要な項目を並べている） */
+.rule-summary {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.84rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rule-caret {
+  flex: none;
+  color: var(--dim);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
 /* 出題の操作ボタン: 2列グリッドにして狭い画面での縦割れ折り返しを防ぐ */
 .action-grid {
   display: grid;

@@ -442,7 +442,36 @@ export function mountHost(app) {
     rulesOverlay.classList.remove('hidden')
   }
 
-  const rulesBtn = el('button', { class: 'btn btn-small', text: 'ルール', onclick: openRules })
+  // ルールバー: 現在のルールを要約表示するボタン。押すとルール設定が開く
+  const ruleSummaryEl = el('span', { class: 'rule-summary', text: '' })
+  const rulesBtn = el('button', { class: 'rule-bar', onclick: openRules }, [
+    el('span', { class: 'rule-label', text: 'ルール' }),
+    ruleSummaryEl,
+    el('span', { class: 'rule-caret', text: '›' }),
+  ])
+
+  // 既定値から変えた「詳細設定」があるか（要約に「カスタム」と出す）
+  function hasCustomDetails() {
+    const r = game.rules
+    return (
+      r.pressSound !== 'winner' ||
+      r.rankBadges !== 'top3' ||
+      r.nickResume !== true ||
+      [...game.players.values()].some((p) => p.handicapMs > 0)
+    )
+  }
+
+  // 主要なルールを短く並べる。幅に収まらない分は CSS で末尾を省略する（左ほど重要）
+  function renderRuleSummary() {
+    const r = game.rules
+    const parts = [r.answerMode === 'ox' ? '○×' : r.answerMode === 'choice4' ? '4択' : '早押し']
+    parts.push(r.winScore > 0 ? `${r.winScore}点先取` : 'エンドレス')
+    if (r.teams > 0) parts.push(`${r.teams}チーム`)
+    parts.push(r.wrongPoints === 0 ? `正解+${r.correctPoints}` : `+${r.correctPoints}/${r.wrongPoints}`)
+    if (r.reveal === 'serial') parts.push('読み上げ')
+    if (hasCustomDetails()) parts.push('カスタム')
+    ruleSummaryEl.textContent = parts.join(' · ')
+  }
 
   // --- 問題セット（出題者の端末にのみ保存。正本はエクスポートしたファイル） ---
   function askFromBank(item) {
@@ -594,7 +623,8 @@ export function mountHost(app) {
   function showGame() {
     app.replaceChildren(
       el('div', { class: 'screen host-screen' }, [
-        topbar([bankBtn, rulesBtn, shareBtn, settingsBtn]),
+        topbar([bankBtn, shareBtn, settingsBtn]),
+        rulesBtn,
         el('div', { class: 'card' }, [
           el('h2', { text: '問題' }),
           questionInput,
@@ -666,6 +696,7 @@ export function mountHost(app) {
 
     const connectedCount = [...game.players.values()].filter((p) => p.connected).length
     statusText.textContent = `${connectedCount}人` // 公開中であることは緑ランプが伝える
+    renderRuleSummary()
     updateCompatButton()
 
     phaseEl.textContent = PHASE_LABEL[game.phase]

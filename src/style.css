@@ -281,6 +281,18 @@ button {
   flex-wrap: wrap;
 }
 
+/* 判定ボタン（正解・誤答系）は2列グリッドで文字割れを防ぐ */
+.judge-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.judge-row .btn {
+  white-space: nowrap;
+  padding: 12px 6px;
+}
+
 .btn-row .btn {
   flex: 1;
 }

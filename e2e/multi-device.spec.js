@@ -68,14 +68,14 @@ test('複数端末: 3人参加（1人はスマホ）で押下順・次点・再�
   await expect(second.page.locator('.buzzer-label')).toHaveText(`${first.nick}さんが回答中`)
 
   // --- 不正解 → 次点者に権利を回す ---
-  await host.page.getByRole('button', { name: '不正解→次点へ' }).click()
+  await host.page.getByRole('button', { name: '誤答・次点へ' }).click()
   await expect(host.page.locator('.order-row', { hasText: nicks[0] }).locator('.badge.ng')).toBeVisible()
   await expect(host.page.locator('.order-row', { hasText: nicks[1] }).locator('.badge.active')).toBeVisible()
   await expect(first.page.locator('.buzzer-label')).toHaveText('誤答のため待機')
   await expect(second.page.locator('.buzzer-label')).toHaveText('回答してください！')
 
   // --- 不正解 → 全員に再開放（誤答者2人は除外されたまま） ---
-  await host.page.getByRole('button', { name: '不正解→全員再開放' }).click()
+  await host.page.getByRole('button', { name: '誤答・全員へ' }).click()
   await expect(first.page.locator('.buzzer-label')).toHaveText('誤答のため待機')
   await expect(second.page.locator('.buzzer-label')).toHaveText('誤答のため待機')
   await expect(third.page.locator('.buzzer')).toHaveClass(/\barmed\b/)
@@ -129,7 +129,7 @@ test('次点がいない不正解は「正解者なし」で終わる', async ({
   await expect(host.page.locator('.badge.active')).toBeVisible()
 
   // 押したのが1人だけなので次点がなく、正解者なしの結果になる
-  await host.page.getByRole('button', { name: '不正解→次点へ' }).click()
+  await host.page.getByRole('button', { name: '誤答・次点へ' }).click()
   await expect(p1.page.locator('.toast.ng', { hasText: '正解者なし' })).toBeVisible()
 
   await p1.context.close()

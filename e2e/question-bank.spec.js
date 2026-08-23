@@ -23,8 +23,8 @@ test('問題セット: 追加→出題→答えの手元表示→正解者名の
   // player 側には答えは一切表示されない（DOM 全体に含まれない）
   await expect(p1.page.locator('body')).not.toContainText('3776m')
 
-  // 出題済みになったので「セットから出題」は無効になる
-  await expect(host.page.getByRole('button', { name: 'セットから出題' })).toBeDisabled()
+  // 未出題の問題がなくなったので「セットから出題」は消える
+  await expect(host.page.getByRole('button', { name: 'セットから出題' })).toBeHidden()
 
   // 判定まで進めると出題履歴に正解者名が残る
   await host.page.waitForTimeout(2200)

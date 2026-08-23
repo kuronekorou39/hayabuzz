@@ -165,16 +165,16 @@ export function mountHost(app) {
     game.judgeCorrect()
     recordOutcome()
   } })
-  const wrongNextBtn = el('button', { class: 'btn btn-ng', text: '不正解→次点へ', onclick: () => {
+  const wrongNextBtn = el('button', { class: 'btn btn-ng', text: '誤答・次点へ', onclick: () => {
     playWrong()
     game.judgeWrongNext()
     recordOutcome() // 次点がおらず正解者なしで決着した場合の記録
   } })
-  const wrongOpenBtn = el('button', { class: 'btn btn-ng', text: '不正解→全員再開放', onclick: () => {
+  const wrongOpenBtn = el('button', { class: 'btn btn-ng', text: '誤答・全員へ', onclick: () => {
     playWrong()
     game.judgeWrongReopen()
   } })
-  const wrongTeamBtn = el('button', { class: 'btn btn-ng', text: '不正解→他チームに開放', onclick: () => {
+  const wrongTeamBtn = el('button', { class: 'btn btn-ng', text: '誤答・他チームへ', onclick: () => {
     playWrong()
     game.judgeWrongOpenOtherTeams()
   } })
@@ -237,6 +237,9 @@ export function mountHost(app) {
     renderHistory()
     historyOverlay.classList.remove('hidden')
   } })
+
+  // ゲーム全体の操作（出題の流れとは別軸なので得点カードにまとめる）
+  scoreCard.append(el('div', { class: 'btn-row' }, [historyBtn, finishBtn, resetScoresBtn]))
 
   // 端末設定（歯車）: 効果音の音量スライダー。動かし終わりに一鳴らしして確かめられる
   const volumeSlider = el('input', { type: 'range', min: '0', max: '100', step: '1' })
@@ -620,30 +623,30 @@ export function mountHost(app) {
 
   // --- 画面（最初から進行画面。共有はポップアップで開いた状態から始まる） ---
 
+  // 出題と進行は1枚のカードにまとめ、操作ボタンはその時点で押せるものだけを出す
+  const actionRow = el('div', { class: 'action-grid' })
+  const judgeRow = el('div', { class: 'judge-row' }, [correctBtn, wrongNextBtn, wrongOpenBtn, wrongTeamBtn])
+
   function showGame() {
     app.replaceChildren(
       el('div', { class: 'screen host-screen' }, [
         topbar([bankBtn, shareBtn, settingsBtn]),
         rulesBtn,
         el('div', { class: 'card' }, [
-          el('h2', { text: '問題' }),
-          questionInput,
-          el('div', { class: 'action-grid' }, [showBtn, askNextBtn, armBtn, stopBtn, closeAnswersBtn]),
-        ]),
-        el('div', { class: 'card' }, [
           el('div', { class: 'topbar' }, [
-            el('h2', { text: '進行' }),
+            el('h2', { text: '出題' }),
             el('span', { class: 'phase-side' }, [hostQBadge, phaseEl]),
           ]),
+          questionInput,
           currentQuestionEl,
           answerLine,
           answersLine,
           orderPlaceholder,
           orderList,
           resultLine,
-          el('div', { class: 'btn-row' }, [correctBtn, wrongNextBtn, wrongOpenBtn, wrongTeamBtn]),
+          judgeRow,
           declareRow,
-          el('div', { class: 'btn-row' }, [historyBtn, finishBtn, resetScoresBtn]),
+          actionRow,
         ]),
         scoreCard,
       ]),
@@ -669,10 +672,9 @@ export function mountHost(app) {
 
   // 問題文の表示（順次表示ルールでは読み上げ位置までを描画する）。問題番号は Q バッジが伝える
   function renderQuestionText() {
-    if (game.qid === 0) {
-      currentQuestionEl.textContent = 'まだ問題がありません'
-      return
-    }
+    // 出題前は入力欄だけでよい（「まだ問題がありません」は情報を増やさない）
+    currentQuestionEl.style.display = game.qid === 0 ? 'none' : ''
+    if (game.qid === 0) return
     if (game.questionText === '') {
       currentQuestionEl.textContent = '（口頭で出題）'
       return
@@ -714,25 +716,35 @@ export function mountHost(app) {
       revealTimer = null
     }
 
-    // 受付中・判定中の「問題を表示」は進行中の問題を破棄してしまうため無効化する
-    // （仕切り直したいときは「受付停止」で一旦戻す）
-    showBtn.textContent = game.phase === PHASE.RESULT ? '次の問題を表示' : '問題を表示'
-    showBtn.disabled = game.phase === PHASE.ARMED || game.phase === PHASE.LOCKED
-    askNextBtn.disabled = showBtn.disabled || nextUnasked(bankItems) === null
-
-    // 回答形式によるボタンの出し分け
     const mass = game.isMassAnswerMode
+    // 出題できるのは進行中でないときだけ（受付中・判定中に出すと進行中の問題を壊す。
+    // 仕切り直したいときは「受付停止」で一旦戻す）
+    const canAsk = game.phase !== PHASE.ARMED && game.phase !== PHASE.LOCKED && game.phase !== PHASE.FINAL
+    showBtn.textContent = game.phase === PHASE.RESULT ? '次の問題を表示' : '問題を表示'
     armBtn.textContent = mass ? '回答受付開始' : '早押し開始'
-    stopBtn.style.display = mass ? 'none' : ''
-    closeAnswersBtn.style.display = mass ? '' : 'none'
-    closeAnswersBtn.disabled = game.phase !== PHASE.ARMED
     finishBtn.textContent = game.phase === PHASE.FINAL ? 'ゲームに戻る' : '結果発表'
-    declareRow.style.display = mass ? '' : 'none'
+
+    // その時点で押せるボタンだけを並べる（非活性のボタンは並べない）
+    const actions = []
+    if (canAsk) {
+      actions.push(showBtn)
+      if (nextUnasked(bankItems) !== null) actions.push(askNextBtn)
+    }
+    if (game.phase === PHASE.QUESTION) actions.push(armBtn)
+    if (mass && game.phase === PHASE.ARMED) actions.push(closeAnswersBtn)
+    if (!mass && (game.phase === PHASE.ARMED || game.phase === PHASE.LOCKED)) actions.push(stopBtn)
+    actionRow.replaceChildren(...actions)
+    actionRow.style.display = actions.length === 0 ? 'none' : ''
+    // 問題の入力欄は出題できるときだけ（進行中は結果や押下順に集中させる）
+    questionInput.style.display = canAsk ? '' : 'none'
+
+    // 一斉回答の正答宣言は締め切り後だけ
+    const canDeclare = mass && game.phase === PHASE.LOCKED
+    declareRow.style.display = canDeclare ? '' : 'none'
     if (mass && lastDeclareMode !== game.rules.answerMode) {
       lastDeclareMode = game.rules.answerMode
       buildDeclareButtons()
     }
-    for (const button of declareRow.children) button.disabled = game.phase !== PHASE.LOCKED
 
     // セット問題の答え・メモ（この端末にだけ表示。P2Pには流れない）
     const bankItem = currentBankId !== null ? bankItems.find((i) => i.id === currentBankId) : undefined
@@ -743,14 +755,10 @@ export function mountHost(app) {
     } else {
       answerLine.className = 'answer-note hidden'
     }
-    armBtn.disabled = game.phase !== PHASE.QUESTION
-    stopBtn.disabled = game.phase !== PHASE.ARMED && game.phase !== PHASE.LOCKED
     // 判定ボタンは誰かが押して判定できるときだけ出す（待機中の画面を静かに保つ）
     const canJudge = !mass && game.phase === PHASE.LOCKED && game.activePlayerId !== null
-    correctBtn.style.display = canJudge ? '' : 'none'
-    wrongNextBtn.style.display = canJudge ? '' : 'none'
-    wrongOpenBtn.style.display = canJudge ? '' : 'none'
-    wrongTeamBtn.style.display = canJudge && game.rules.teams > 0 ? '' : 'none'
+    judgeRow.style.display = canJudge ? '' : 'none'
+    wrongTeamBtn.style.display = game.rules.teams > 0 ? '' : 'none'
 
     // チーム合計（チーム戦のみ）
     if (game.rules.teams > 0) {

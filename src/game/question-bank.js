@@ -4,13 +4,19 @@ import { randomCode } from '../util/random.js'
 // 問題セット（出題者の端末にのみ保存。P2P には答え・メモを一切流さない）。
 // ブラウザ保存は消えることがある前提で、正本はエクスポートしたファイルとする。
 //
-// 1問のデータ: { id, q, a, memo, history: [{ at, winner, wrongs }] }
+// 1問のデータ: { id, type, q, a, choices, memo, history: [{ at, winner, wrongs }] }
+//   type   : 'buzzer'=早押し（答えは自由記述・出題者が目視判定）
+//            'ox'=○×（a は 'o' か 'x'）
+//            'choice4'=4択（choices に選択肢4つ、a は '1'〜'4'）
 //   history には出題のたびに
 //   { at: 出題日時(epoch ms), winner: 正解者名 | null, wrongs: 誤答者名の配列 } が積まれる
 
 const BANK_KEY = 'hayabuzz.questionBank'
 const EXPORTED_KEY = 'hayabuzz.questionBank.exportedAt'
 const MAX_ITEMS = 2000
+
+export const QUESTION_TYPES = ['buzzer', 'ox', 'choice4']
+export const TYPE_LABEL = { buzzer: '早押し', ox: '○×', choice4: '4択' }
 
 const isItem = (v) =>
   typeof v === 'object' &&
@@ -22,10 +28,17 @@ const isItem = (v) =>
   Array.isArray(v.history)
 
 function sanitizeItem(raw) {
+  // type を持たない旧データは早押し問題として扱う
+  const type = QUESTION_TYPES.includes(raw.type) ? raw.type : 'buzzer'
+  const choices = Array.isArray(raw.choices)
+    ? raw.choices.filter((c) => typeof c === 'string').map((c) => c.slice(0, 100)).slice(0, 4)
+    : []
   return {
     id: raw.id.slice(0, 16),
+    type,
     q: raw.q.slice(0, CONFIG.questionMaxLen),
     a: raw.a.slice(0, 200),
+    choices: type === 'choice4' ? choices : [],
     memo: raw.memo.slice(0, 500),
     history: raw.history
       .filter((h) => typeof h === 'object' && h !== null && typeof h.at === 'number')
@@ -57,21 +70,34 @@ export function saveBank(items) {
   }
 }
 
-export function addQuestion(items, { q, a = '', memo = '' }) {
+export function addQuestion(items, { type = 'buzzer', q, a = '', choices = [], memo = '' }) {
   if (items.length >= MAX_ITEMS) return null
-  const item = sanitizeItem({ id: randomCode(8), q, a, memo, history: [] })
+  const item = sanitizeItem({ id: randomCode(8), type, q, a, choices, memo, history: [] })
   if (item.q.trim() === '') return null
   items.push(item)
   return item
 }
 
-// スプレッドシート等からの貼り付け取り込み（1行1問: 問題[TAB]答え[TAB]メモ）
+// 貼り付け取り込み（1行1問・タブ区切り）。形式は列の並びで判別する:
+//   早押し: 問題 / 答え / メモ
+//   ○×  : 問題 / ○ か × / メモ
+//   4択  : 問題 / 選択肢1 / 選択肢2 / 選択肢3 / 選択肢4 / 正解番号 / メモ
 export function importTsv(items, text) {
   let count = 0
   for (const line of text.split('\n')) {
-    const [q = '', a = '', memo = ''] = line.split('\t')
-    if (q.trim() === '') continue
-    if (addQuestion(items, { q: q.trim(), a: a.trim(), memo: memo.trim() }) !== null) count += 1
+    const cells = line.split('\t').map((c) => c.trim())
+    const q = cells[0] ?? ''
+    if (q === '') continue
+    let spec
+    if (cells.length >= 6 && /^[1-4]$/.test(cells[5])) {
+      spec = { type: 'choice4', q, choices: cells.slice(1, 5), a: cells[5], memo: cells[6] ?? '' }
+    } else if (['○', 'o', 'O', '×', 'x', 'X'].includes(cells[1] ?? '')) {
+      const isCircle = ['○', 'o', 'O'].includes(cells[1])
+      spec = { type: 'ox', q, a: isCircle ? 'o' : 'x', memo: cells[2] ?? '' }
+    } else {
+      spec = { type: 'buzzer', q, a: cells[1] ?? '', memo: cells[2] ?? '' }
+    }
+    if (addQuestion(items, spec) !== null) count += 1
   }
   return count
 }

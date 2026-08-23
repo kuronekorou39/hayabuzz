@@ -162,20 +162,23 @@ function startGame(app, roomCode, nick) {
     renderState()
   }
 
-  function buildAnswerPanel(mode) {
+  // 4択の選択肢テキスト（問題セットから出題された場合のみ配信される）
+  function buildAnswerPanel(mode, choices = []) {
     const options =
       mode === 'ox'
         ? [{ value: 'o', label: '○', cls: 'answer-o' }, { value: 'x', label: '×', cls: 'answer-x' }]
-        : ['1', '2', '3', '4'].map((n) => ({ value: n, label: n, cls: 'answer-choice' }))
-    answerPanel.className = `answer-panel ${mode === 'ox' ? 'grid-ox' : 'grid-choice4'}`
+        : ['1', '2', '3', '4'].map((n, i) => ({ value: n, label: n, text: choices[i] ?? '', cls: 'answer-choice' }))
+    const hasText = options.some((option) => (option.text ?? '') !== '')
+    answerPanel.className = `answer-panel ${mode === 'ox' ? 'grid-ox' : 'grid-choice4'}${hasText ? ' with-text' : ''}`
     answerPanel.replaceChildren(
       ...options.map((option) =>
         el('button', {
           class: `answer-btn ${option.cls}`,
-          text: option.label,
           'data-value': option.value,
           onclick: () => sendAnswer(option.value),
-        }),
+        }, (option.text ?? '') !== ''
+          ? [el('span', { class: 'answer-num', text: option.label }), el('span', { class: 'answer-text', text: option.text })]
+          : [el('span', { class: 'answer-num', text: option.label })]),
       ),
     )
   }
@@ -547,9 +550,11 @@ function startGame(app, roomCode, nick) {
     // 一斉回答モードでは早押しボタンの代わりに回答パネルを表示する
     buzzer.style.display = mass ? 'none' : ''
     if (mass) {
-      if (builtAnswerMode !== snapshot.rules.answerMode) {
-        builtAnswerMode = snapshot.rules.answerMode
-        buildAnswerPanel(snapshot.rules.answerMode)
+      // 選択肢は問題ごとに変わるため、形式か選択肢が変わったら作り直す
+      const panelKey = `${snapshot.rules.answerMode}:${snapshot.choices.join(' ')}`
+      if (builtAnswerMode !== panelKey) {
+        builtAnswerMode = panelKey
+        buildAnswerPanel(snapshot.rules.answerMode, snapshot.choices)
         selectedValue = null
       }
       answerPanel.classList.remove('hidden')

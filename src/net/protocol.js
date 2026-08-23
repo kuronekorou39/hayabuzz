@@ -1,7 +1,7 @@
 import { CONFIG } from '../config.js'
 import { PHASE } from '../game/phases.js'
 
-export const PROTO_VERSION = 4 // rules に rankBadges を追加（旧版とはスキーマ非互換）
+export const PROTO_VERSION = 5 // state に choices を追加（旧版とはスキーマ非互換）
 
 export const MSG = {
   // player → host
@@ -81,6 +81,7 @@ const SCHEMAS = {
     revealedAnswers: nullable(arrayOf(shapeOf({ playerId: id, value: str(100) }))),
     correctValue: nullable(str(100)), // 一斉回答モードの正答（発表後）
     answerText: nullable(str(200)), // 答え（判定結果のときだけ。それ以外は null で覗き見不可）
+    choices: arrayOf(str(100)), // 4択の選択肢（セットから出題した場合。なければ空）
   },
 }
 

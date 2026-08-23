@@ -12,10 +12,12 @@ import {
   loadBank,
   markAsked,
   parseImport,
+  QUESTION_TYPES,
   recordOutcome as recordBankOutcome,
   removeQuestion,
   saveBank,
   setExportedAt,
+  TYPE_LABEL,
 } from '../game/question-bank.js'
 import { SAMPLE_QUESTIONS } from '../game/sample-questions.js'
 import { teamMeta, teamTotals } from '../game/teams.js'
@@ -179,6 +181,18 @@ export function mountHost(app) {
   const declareRow = el('div', { class: 'btn-row' })
 
   function buildDeclareButtons() {
+    // セットから出題した問題は正解が分かっているので、ワンタップで発表できる
+    const bankItem = currentBankId !== null ? bankItems.find((i) => i.id === currentBankId) : undefined
+    if (bankItem !== undefined && bankItem.type === game.rules.answerMode && bankItem.a !== '') {
+      declareRow.replaceChildren(
+        el('button', { class: 'btn btn-ok', text: `正解を発表（${bankAnswerLabel(bankItem)}）`, onclick: () => {
+          playCorrect()
+          game.declareCorrect(bankItem.a)
+          recordOutcome()
+        } }),
+      )
+      return
+    }
     const options =
       game.rules.answerMode === 'ox'
         ? [{ value: 'o', label: '正解は○' }, { value: 'x', label: '正解は×' }]
@@ -484,24 +498,64 @@ export function mountHost(app) {
     markAsked(bankItems, item.id, Date.now())
     saveBank(bankItems)
     questionInput.value = item.q // 出題中の問題文は入力欄に表示したままにする
-    game.showQuestion(item.q, item.a) // 答えは判定結果のときに全員へ表示される
+    // 問題の形式に合わせて回答形式のルールも切り替える（4択の問題を早押しで出さない）
+    if (game.rules.answerMode !== item.type) game.setAnswerMode(item.type)
+    game.showQuestion(item.q, bankAnswerLabel(item), item.choices) // 答えは判定結果のときに全員へ表示
     bankOverlay.classList.add('hidden')
   }
 
-  const bankQInput = el('input', { class: 'input bank-q-input', type: 'text', placeholder: '問題文', maxlength: CONFIG.questionMaxLen })
+  // 表示用の答え（○×は記号に、4択は「2. 選択肢」の形にする）
+  function bankAnswerLabel(item) {
+    if (item.a === '') return ''
+    if (item.type === 'ox') return item.a === 'o' ? '○' : '×'
+    if (item.type === 'choice4') {
+      const index = Number(item.a) - 1
+      const text = item.choices[index] ?? ''
+      return text !== '' ? `${item.a}. ${text}` : item.a
+    }
+    return item.a
+  }
+
+  // --- 問題の追加フォーム（形式によって入力項目が変わる） ---
+  const bankTypeSelect = el('select', { class: 'input bank-type-select' },
+    QUESTION_TYPES.map((t) => el('option', { value: t, text: TYPE_LABEL[t] })))
+  const bankQInput = el('textarea', { class: 'input bank-q-input', rows: '2', placeholder: '問題文', maxlength: CONFIG.questionMaxLen })
   const bankAInput = el('input', { class: 'input bank-a-input', type: 'text', placeholder: '答え', maxlength: 200 })
-  const bankMemoInput = el('input', { class: 'input bank-memo-input', type: 'text', placeholder: 'メモ（判定基準など）', maxlength: 500 })
+  const bankOxSelect = el('select', { class: 'input bank-ox-select' }, [
+    el('option', { value: 'o', text: '正解は ○' }),
+    el('option', { value: 'x', text: '正解は ×' }),
+  ])
+  const bankChoiceInputs = ['1', '2', '3', '4'].map((n) =>
+    el('input', { class: 'input bank-choice-input', type: 'text', placeholder: `選択肢${n}`, maxlength: 100 }))
+  const bankCorrectSelect = el('select', { class: 'input bank-correct-select' },
+    ['1', '2', '3', '4'].map((n) => el('option', { value: n, text: `正解は ${n}` })))
+  const bankMemoInput = el('input', { class: 'input bank-memo-input', type: 'text', placeholder: 'メモ（判定基準など・任意）', maxlength: 500 })
+
+  const bankAnswerRow = el('div', { class: 'bank-answer-row' })
+  function syncBankForm() {
+    const type = bankTypeSelect.value
+    if (type === 'ox') bankAnswerRow.replaceChildren(bankOxSelect)
+    else if (type === 'choice4') bankAnswerRow.replaceChildren(...bankChoiceInputs, bankCorrectSelect)
+    else bankAnswerRow.replaceChildren(bankAInput)
+  }
+  bankTypeSelect.addEventListener('change', syncBankForm)
+  syncBankForm()
+
   const bankAddBtn = el('button', { class: 'btn btn-primary btn-small', text: '追加', onclick: () => {
-    const item = addQuestion(bankItems, {
-      q: bankQInput.value,
-      a: bankAInput.value,
-      memo: bankMemoInput.value,
-    })
+    const type = bankTypeSelect.value
+    const spec = { type, q: bankQInput.value, memo: bankMemoInput.value }
+    if (type === 'ox') spec.a = bankOxSelect.value
+    else if (type === 'choice4') {
+      spec.a = bankCorrectSelect.value
+      spec.choices = bankChoiceInputs.map((input) => input.value)
+    } else spec.a = bankAInput.value
+    const item = addQuestion(bankItems, spec)
     if (item === null) return
     saveBank(bankItems)
     bankQInput.value = ''
     bankAInput.value = ''
     bankMemoInput.value = ''
+    for (const input of bankChoiceInputs) input.value = ''
     renderBank()
     bankQInput.focus()
   } })
@@ -513,7 +567,11 @@ export function mountHost(app) {
   const bankPaste = el('textarea', {
     class: 'input bank-paste',
     rows: '3',
-    placeholder: '貼り付け取り込み: 1行1問「問題 (タブ) 答え (タブ) メモ」。表計算からのコピペでOK',
+    placeholder:
+      '1行1問・タブ区切りで貼り付け（表計算からのコピペでOK）\n' +
+      '早押し: 問題／答え／メモ\n' +
+      '○×: 問題／○ か ×／メモ\n' +
+      '4択: 問題／選択肢1〜4／正解番号／メモ',
   })
   const bankImportBtn = el('button', { class: 'btn btn-small', text: '取り込み', onclick: () => {
     const count = importTsv(bankItems, bankPaste.value)
@@ -525,7 +583,7 @@ export function mountHost(app) {
   } })
 
   // お試し用のサンプル問題（既に同じ問題文があるものは追加しない）
-  const sampleBtn = el('button', { class: 'btn btn-small', text: 'サンプル20問を取り込む', onclick: () => {
+  const sampleBtn = el('button', { class: 'btn btn-small', text: 'サンプルを取り込む', onclick: () => {
     for (const sample of SAMPLE_QUESTIONS) {
       if (bankItems.some((item) => item.q === sample.q)) continue
       addQuestion(bankItems, sample)
@@ -582,25 +640,31 @@ export function mountHost(app) {
     const askable = canAskNow()
     bankNote.style.display = askable ? 'none' : ''
     bankRows.replaceChildren(
-      ...bankItems.map((item) =>
-        el('div', { class: 'bank-row' }, [
+      ...bankItems.map((item) => {
+        const answer = bankAnswerLabel(item)
+        return el('div', { class: 'bank-row' }, [
           el('div', { class: 'bank-main' }, [
-            el('span', { class: 'bank-q', text: item.q }),
-            el('span', { class: 'bank-meta', text: `${item.a !== '' ? `答え: ${item.a} · ` : ''}${formatAskedMeta(item)}` }),
+            el('div', { class: 'bank-head' }, [
+              el('span', { class: `type-badge type-${item.type}`, text: TYPE_LABEL[item.type] }),
+              el('span', { class: 'bank-q', text: item.q }),
+            ]),
+            el('span', { class: 'bank-meta', text: `${answer !== '' ? `答え: ${answer} · ` : ''}${formatAskedMeta(item)}` }),
           ]),
-          el('button', {
-            class: 'btn btn-mini',
-            text: '出題',
-            disabled: !askable,
-            onclick: () => askFromBank(item),
-          }),
-          el('button', { class: 'btn btn-mini', text: '削除', onclick: () => {
-            removeQuestion(bankItems, item.id)
-            saveBank(bankItems)
-            renderBank()
-          } }),
-        ]),
-      ),
+          el('div', { class: 'bank-actions' }, [
+            el('button', {
+              class: 'btn btn-mini',
+              text: '出題',
+              disabled: !askable,
+              onclick: () => askFromBank(item),
+            }),
+            el('button', { class: 'btn btn-mini btn-ng', text: '削除', onclick: () => {
+              removeQuestion(bankItems, item.id)
+              saveBank(bankItems)
+              renderBank()
+            } }),
+          ]),
+        ])
+      }),
     )
     const exportedAt = getExportedAt()
     exportNote.textContent =
@@ -609,17 +673,30 @@ export function mountHost(app) {
         : 'ブラウザ保存は消えることがあります。作ったらエクスポートしてファイルを正本にしてください'
   }
 
+  // 一覧を主役にし、追加フォームと取り込み・書き出しは折りたたんでおく
   const bankOverlay = popupOverlay(
     'bank-overlay',
-    el('div', { class: 'card rules-card' }, [
+    el('div', { class: 'card rules-card bank-card' }, [
       el('h2', { text: '問題セット' }),
       bankNote,
       bankPlaceholder,
       bankRows,
-      el('div', { class: 'bank-add' }, [bankQInput, bankAInput, bankMemoInput, bankAddBtn]),
-      bankPaste,
-      el('div', { class: 'btn-row' }, [bankImportBtn, exportBtn, importLabel, sampleBtn]),
-      exportNote,
+      el('details', { class: 'rules-advanced' }, [
+        el('summary', { text: '問題を追加' }),
+        el('div', { class: 'bank-add' }, [
+          el('div', { class: 'settings-row' }, [el('span', { text: '形式' }), bankTypeSelect]),
+          bankQInput,
+          bankAnswerRow,
+          bankMemoInput,
+          bankAddBtn,
+        ]),
+      ]),
+      el('details', { class: 'rules-advanced' }, [
+        el('summary', { text: '取り込み・書き出し' }),
+        bankPaste,
+        el('div', { class: 'btn-row' }, [bankImportBtn, exportBtn, importLabel, sampleBtn]),
+        exportNote,
+      ]),
     ]),
   )
   const bankBtn = el('button', { class: 'btn btn-small', text: 'セット', onclick: () => {
@@ -756,16 +833,25 @@ export function mountHost(app) {
     // 一斉回答の正答宣言は締め切り後だけ
     const canDeclare = mass && game.phase === PHASE.LOCKED
     declareRow.style.display = canDeclare ? '' : 'none'
-    if (mass && lastDeclareMode !== game.rules.answerMode) {
-      lastDeclareMode = game.rules.answerMode
+    // 出題元が変わると「正解を発表」の中身も変わるため、問題も鍵に含める
+    const declareKey = `${game.rules.answerMode}:${currentBankId ?? ''}`
+    if (mass && lastDeclareMode !== declareKey) {
+      lastDeclareMode = declareKey
       buildDeclareButtons()
     }
 
     // セット問題の答え・メモ（この端末にだけ表示。P2Pには流れない）
     const bankItem = currentBankId !== null ? bankItems.find((i) => i.id === currentBankId) : undefined
     if (bankItem !== undefined) {
-      const memo = bankItem.memo !== '' ? ` ／ メモ: ${bankItem.memo}` : ''
-      answerLine.textContent = `答え: ${bankItem.a !== '' ? bankItem.a : '（未記入）'}${memo}`
+      const parts = []
+      if (bankItem.type === 'choice4') {
+        // 選択肢は回答者にも配信されるが、出題者の手元でも読み上げられるように出す
+        parts.push(bankItem.choices.map((c, i) => `${i + 1}. ${c}`).join(' / '))
+      }
+      const answer = bankAnswerLabel(bankItem)
+      parts.push(`答え: ${answer !== '' ? answer : '（未記入）'}`)
+      if (bankItem.memo !== '') parts.push(`メモ: ${bankItem.memo}`)
+      answerLine.textContent = parts.join(' ／ ')
       answerLine.className = 'answer-note'
     } else {
       answerLine.className = 'answer-note hidden'

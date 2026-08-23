@@ -1243,19 +1243,26 @@ textarea.input {
   min-width: 0;
 }
 
-/* 問題セット */
+/* 問題セット: 一覧を主役にする（追加・取り込みは折りたたみの中） */
+.overlay .bank-card {
+  width: min(94vw, 420px);
+}
+
+/* スクロールはカード側に任せる（入れ子スクロールは操作しづらい） */
 .bank-rows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 34vh;
-  overflow-y: auto;
+  gap: 6px;
+  text-align: left;
 }
 
 .bank-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  background: var(--card-2);
+  border-radius: 10px;
+  padding: 8px 10px;
 }
 
 .bank-main {
@@ -1263,13 +1270,23 @@ textarea.input {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
+.bank-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* 問題文は2行まで見せる（1行省略だと何の問題か分からないことが多い） */
 .bank-q {
+  font-size: 0.9rem;
+  line-height: 1.35;
+  max-height: 2.7em;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .bank-meta {
@@ -1280,12 +1297,49 @@ textarea.input {
   white-space: nowrap;
 }
 
+/* 形式バッジ（早押し・○×・4択） */
+.type-badge {
+  flex: none;
+  font-size: 0.66rem;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 2px 6px;
+  color: var(--dim);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.type-badge.type-ox {
+  color: #6fdea6;
+  background: rgba(70, 230, 130, 0.14);
+}
+
+.type-badge.type-choice4 {
+  color: #ffd94d;
+  background: rgba(255, 210, 60, 0.14);
+}
+
+.bank-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bank-actions .btn {
+  padding: 5px 10px;
+  font-size: 0.78rem;
+}
+
 .bank-add {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+
+.bank-answer-row {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
 }
 
 .bank-file-input {
@@ -1318,6 +1372,12 @@ textarea.input {
 }
 
 .answer-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
   border: 2px solid var(--border);
   border-radius: 18px;
   background: var(--card-2);
@@ -1326,6 +1386,18 @@ textarea.input {
   font-weight: 800;
   touch-action: manipulation;
   min-height: 0;
+}
+
+/* 選択肢のテキストがある4択は、番号を小さくして本文を主役にする */
+.answer-panel.with-text .answer-btn {
+  font-size: 1.6rem;
+}
+
+.answer-text {
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .answer-btn.answer-o {

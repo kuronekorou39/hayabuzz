@@ -1,12 +1,14 @@
 ﻿import { expect, test } from '@playwright/test'
+import { SAMPLE_QUESTIONS } from '../src/game/sample-questions.js'
 import { createRoom, joinPlayer, pressBuzzer } from './helpers.js'
 
 test('問題セット: 追加→出題→答えの手元表示→正解者名の記録→貼り付け取り込み', async ({ browser }) => {
   const host = await createRoom(browser)
   const p1 = await joinPlayer(browser, host.code, 'たろう')
 
-  // セットに1問追加
+  // セットに1問追加（追加フォームは折りたたみの中）
   await host.page.getByRole('button', { name: 'セット', exact: true }).click()
+  await host.page.getByText('問題を追加').click()
   await host.page.locator('.bank-q-input').fill('富士山の標高は？')
   await host.page.locator('.bank-a-input').fill('3776m')
   await host.page.locator('.bank-memo-input').fill('メートル単位で回答')
@@ -53,16 +55,56 @@ test('問題セット: 追加→出題→答えの手元表示→正解者名の
   await host.page.locator('.history-overlay').getByRole('button', { name: '閉じる' }).click()
   await host.page.getByRole('button', { name: 'セット', exact: true }).click()
 
-  // スプレッドシート形式（タブ区切り）の貼り付け取り込み
+  // スプレッドシート形式（タブ区切り）の貼り付け取り込み（折りたたみの中）
+  await host.page.getByText('取り込み・書き出し').click()
   await host.page.locator('.bank-paste').fill('Q2\tA2\nQ3\tA3\tメモ3')
-  await host.page.getByRole('button', { name: '取り込み' }).click()
+  await host.page.getByRole('button', { name: '取り込み', exact: true }).click()
   await expect(host.page.locator('.bank-row')).toHaveCount(3)
 
-  // サンプル20問の取り込み（既存3問 + 20問。再度押しても重複しない）
-  await host.page.getByRole('button', { name: 'サンプル20問を取り込む' }).click()
-  await expect(host.page.locator('.bank-row')).toHaveCount(23)
-  await host.page.getByRole('button', { name: 'サンプル20問を取り込む' }).click()
-  await expect(host.page.locator('.bank-row')).toHaveCount(23)
+  // サンプルの取り込み（既存3問 + サンプル。再度押しても重複しない）
+  const withSamples = 3 + SAMPLE_QUESTIONS.length
+  await host.page.getByRole('button', { name: 'サンプルを取り込む' }).click()
+  await expect(host.page.locator('.bank-row')).toHaveCount(withSamples)
+  await host.page.getByRole('button', { name: 'サンプルを取り込む' }).click()
+  await expect(host.page.locator('.bank-row')).toHaveCount(withSamples)
+
+  await p1.context.close()
+  await host.context.close()
+})
+
+test('4択問題: セットに登録して出題すると選択肢が配信され、正解を1タップで発表できる', async ({ browser }) => {
+  const host = await createRoom(browser)
+  const p1 = await joinPlayer(browser, host.code, 'たろう')
+
+  // 4択の問題を登録（形式を選ぶと入力欄が選択肢+正解番号に変わる）
+  await host.page.getByRole('button', { name: 'セット', exact: true }).click()
+  await host.page.getByText('問題を追加').click()
+  await host.page.locator('.bank-type-select').selectOption('choice4')
+  await host.page.locator('.bank-q-input').fill('日本の都道府県はいくつ？')
+  const choices = ['43', '45', '47', '49']
+  for (const [i, value] of choices.entries()) {
+    await host.page.locator('.bank-choice-input').nth(i).fill(value)
+  }
+  await host.page.locator('.bank-correct-select').selectOption('3')
+  await host.page.getByRole('button', { name: '追加' }).click()
+  await host.page.getByText('問題を追加').click() // 追加フォームを閉じて一覧を見る
+
+  // 出題すると回答形式も4択に切り替わり、選択肢が回答者に届く
+  await host.page.locator('.bank-row').getByRole('button', { name: '出題' }).click()
+  await expect(host.page.locator('.answer-note')).toContainText('3. 47')
+  await expect(p1.page.locator('.answer-btn').nth(2)).toContainText('47')
+  await host.page.waitForTimeout(2200)
+  await host.page.getByRole('button', { name: '回答受付開始' }).click()
+
+  // 回答 → 締め切り → 正解はセットから分かっているので1タップで発表できる
+  await p1.page.locator('.answer-btn').nth(2).click()
+  await host.page.getByRole('button', { name: '締め切り' }).click()
+  await host.page.getByRole('button', { name: '正解を発表（3. 47）' }).click()
+  await expect(p1.page.locator('.me-summary')).toContainText('1点')
+
+  // セットの履歴にも正解者が残る
+  await host.page.getByRole('button', { name: 'セット', exact: true }).click()
+  await expect(host.page.locator('.bank-row')).toContainText('たろう')
 
   await p1.context.close()
   await host.context.close()

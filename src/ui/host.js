@@ -79,16 +79,18 @@ export function mountHost(app) {
     ])
   }
 
-  // --- 共有カード（ロビーと進行中の共有オーバーレイで同じノードを使い回す） ---
+  // --- 共有カード（部屋を作った直後に自動で開き、以後は「共有」から開く） ---
   const urlInput = el('input', { class: 'input url-input', type: 'text', readonly: true, value: joinUrl })
   const copyBtn = el('button', { class: 'btn btn-small', text: 'コピー', onclick: copyUrl })
   const qrCanvas = el('canvas', { class: 'qr' })
+  const shareCount = el('p', { class: 'share-count', text: '参加 0人' })
   const shareCard = el('div', { class: 'card share-card' }, [
     el('h2', { text: 'ルームコード' }),
     el('div', { class: 'room-code', text: roomCode }),
     el('div', { class: 'url-row' }, [urlInput, copyBtn]),
     el('div', { class: 'qr-wrap' }, [qrCanvas]),
-    el('p', { class: 'placeholder', text: 'QRコードの読み取りか、URLの共有で参加できます。ゲーム開始後も「共有」から表示できます。' }),
+    shareCount,
+    el('p', { class: 'placeholder', text: 'QRコードの読み取りか、URLの共有で参加できます。参加はいつでも受け付けます（この画面は「共有」からいつでも開けます）' }),
   ])
 
   QRCode.toCanvas(qrCanvas, joinUrl, { width: 168, margin: 2 }).catch(() => {
@@ -268,11 +270,9 @@ export function mountHost(app) {
 
   // --- 進行中の共有オーバーレイ ---
   const shareOverlay = el('div', { class: 'overlay share-overlay hidden' })
-  const shareBtn = el('button', { class: 'btn btn-small', text: '共有', onclick: () => {
-    // shareCard はロビーと共用のため、開くたびにラッパーへ入れ直す
-    shareOverlay.replaceChildren(el('div', { class: 'overlay-card-wrap' }, [shareCard, closeX(shareOverlay)]))
-    shareOverlay.classList.remove('hidden')
-  } })
+  shareOverlay.append(el('div', { class: 'overlay-card-wrap' }, [shareCard, closeX(shareOverlay)]))
+  const openShare = () => shareOverlay.classList.remove('hidden')
+  const shareBtn = el('button', { class: 'btn btn-small', text: '共有', onclick: openShare })
 
   // --- ルール設定オーバーレイ（回答形式・問題の表示・押下音・復帰・ハンデ） ---
   const answerModeSelect = el('select', { class: 'input' }, [
@@ -587,21 +587,7 @@ export function mountHost(app) {
   // ポップアップは範囲外タップでも閉じる
   backdropDismiss(shareOverlay, rulesOverlay, bankOverlay, hostDiagOverlay, hostSettingsOverlay, historyOverlay)
 
-  // --- 画面: ロビー（参加者集め） → 進行 ---
-
-  function showLobby() {
-    app.replaceChildren(
-      el('div', { class: 'screen host-screen' }, [
-        topbar([rulesBtn, settingsBtn]),
-        shareCard,
-        scoreCard,
-        el('button', { class: 'btn btn-primary btn-big', text: 'クイズを開始', onclick: showGame }),
-      ]),
-      rulesOverlay,
-      hostDiagOverlay,
-      hostSettingsOverlay,
-    )
-  }
+  // --- 画面（最初から進行画面。共有はポップアップで開いた状態から始まる） ---
 
   function showGame() {
     app.replaceChildren(
@@ -678,6 +664,7 @@ export function mountHost(app) {
 
     const connectedCount = [...game.players.values()].filter((p) => p.connected).length
     statusText.textContent = `${connectedCount}人` // 公開中であることは緑ランプが伝える
+    shareCount.textContent = `参加 ${connectedCount}人`
     updateCompatButton()
 
     phaseEl.textContent = PHASE_LABEL[game.phase]
@@ -852,7 +839,8 @@ export function mountHost(app) {
     )
   }
 
-  showLobby()
+  showGame()
+  openShare() // 部屋を作った直後は共有（QR・URL）を開いた状態で参加者を集める
   render()
   transport.join(roomCode).catch(() => {}) // 失敗内容は診断ログに記録済み
 }

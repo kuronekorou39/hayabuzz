@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test'
 
-// 出題者として部屋を作り、ロビー（共有画面）からゲーム進行画面へ進む。
-// 専用のブラウザコンテキスト（=別端末相当）を割り当てる
+// 出題者として部屋を作る。最初から進行画面+共有ポップアップが開いた状態なので、
+// ポップアップを閉じて進行画面を出す。専用のブラウザコンテキスト（=別端末相当）を割り当てる
 export async function createRoom(browser) {
   const context = await browser.newContext()
   const page = await context.newPage()
@@ -9,7 +9,7 @@ export async function createRoom(browser) {
   await page.getByRole('button', { name: '出題者として部屋を作る' }).click()
   const code = (await page.locator('.room-code').textContent()).trim()
   expect(code).toMatch(/^[A-Z0-9]{4}$/)
-  await page.getByRole('button', { name: 'クイズを開始' }).click()
+  await page.locator('.share-overlay').getByRole('button', { name: '閉じる' }).click()
   return { context, page, code }
 }
 

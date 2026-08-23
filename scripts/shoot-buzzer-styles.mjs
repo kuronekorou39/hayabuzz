@@ -15,7 +15,7 @@ const host = await hostCtx.newPage()
 await host.goto(BASE)
 await host.getByRole('button', { name: '出題者として部屋を作る' }).click()
 const code = (await host.locator('.room-code').textContent()).trim()
-await host.getByRole('button', { name: 'クイズを開始' }).click()
+await host.locator('.share-overlay').getByRole('button', { name: '閉じる' }).click()
 
 // armed 中のグローの点滅を止めて静止画で比較できるよう reducedMotion にする
 const playerCtx = await browser.newContext({ viewport: { width: 390, height: 780 }, reducedMotion: 'reduce' })

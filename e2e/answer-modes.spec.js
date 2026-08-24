@@ -41,6 +41,31 @@ test('○×クイズ: 一斉回答→締め切り→正答発表で自動採点�
   await host.context.close()
 })
 
+test('出題時に正解を入力しておくと、締め切り後にワンタップで発表できる', async ({ browser }) => {
+  const host = await createRoom(browser)
+  const p1 = await joinPlayer(browser, host.code, 'たろう')
+
+  await host.page.getByRole('button', { name: 'ルール' }).click()
+  await host.page.locator('.settings-row', { hasText: '回答形式' }).locator('select').selectOption('ox')
+  await host.page.locator('.rules-overlay').getByRole('button', { name: '閉じる' }).click()
+
+  // 問題文と一緒に正解（○）も入力して出題する
+  await host.page.locator('.question-input').fill('富士山は日本一高い山である。○か×か')
+  await host.page.locator('.ask-ox-select').selectOption('o')
+  await host.page.getByRole('button', { name: '問題を表示' }).click()
+  await host.page.getByRole('button', { name: '回答受付開始' }).click()
+
+  await p1.page.getByRole('button', { name: '○' }).click()
+  await host.page.getByRole('button', { name: '締め切り' }).click()
+  await host.page.getByRole('button', { name: '正解を発表（○）' }).click()
+  await expect(p1.page.locator('.me-summary')).toContainText('1点')
+  // 答えは判定結果になってから回答者にも表示される
+  await expect(p1.page.locator('.phase-banner')).toContainText('答え：○')
+
+  await p1.context.close()
+  await host.context.close()
+})
+
 test('結果発表: 最終ランキングが全端末に表示され、ゲームに戻れる', async ({ browser }) => {
   const host = await createRoom(browser)
   const p1 = await joinPlayer(browser, host.code, 'たろう')

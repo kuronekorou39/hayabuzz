@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+﻿import { describe, expect, test } from 'vitest'
 import { HostGame } from '../src/game/host-game.js'
 import { PHASE } from '../src/game/phases.js'
 import { MSG, PROTO_VERSION } from '../src/net/protocol.js'
@@ -17,7 +17,7 @@ describe('出題履歴（askedLog）', () => {
     join(game, 'S1aaaaaaaaaaaaaa', 'たろう', 'p1')
     join(game, 'S2aaaaaaaaaaaaaa', 'はなこ', 'p2')
     const [id1, id2] = [...game.players.keys()]
-    game.showQuestion('テスト問題', 'テスト答え')
+    game.showQuestion({ text: 'テスト問題', answer: 'テスト答え' })
     // 押下順が付いた状態を直接作る（時刻同期を介した実際の押下は e2e で検証している）
     game.phase = PHASE.LOCKED
     game.order = [{ playerId: id1, deltaMs: 0 }, { playerId: id2, deltaMs: 10 }]
@@ -38,7 +38,7 @@ describe('出題履歴（askedLog）', () => {
     const game = makeGame()
     join(game, 'S1aaaaaaaaaaaaaa', 'たろう', 'p1')
     const [id1] = [...game.players.keys()]
-    game.showQuestion('テスト問題')
+    game.showQuestion({ text: 'テスト問題' })
     game.phase = PHASE.LOCKED
     game.order = [{ playerId: id1, deltaMs: 0 }]
     game.activePlayerId = id1
@@ -56,7 +56,7 @@ describe('出題履歴（askedLog）', () => {
     join(game, 'S1aaaaaaaaaaaaaa', 'たろう', 'p1')
     join(game, 'S2aaaaaaaaaaaaaa', 'はなこ', 'p2')
     game.setAnswerMode('ox')
-    game.showQuestion('○×問題')
+    game.showQuestion({ text: '○×問題' })
     game.arm()
     game.handleMessage({ type: MSG.ANSWER, qid: game.qid, value: 'o' }, 'p1')
     game.handleMessage({ type: MSG.ANSWER, qid: game.qid, value: 'x' }, 'p2')

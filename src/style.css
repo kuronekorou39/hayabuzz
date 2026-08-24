@@ -1336,7 +1336,8 @@ textarea.input {
   gap: 8px;
 }
 
-.bank-answer-row {
+/* 形式に応じて変わる答え入力欄（出題カード・問題セットの追加フォームで共用） */
+.answer-fields {
   display: flex;
   flex-direction: column;
   gap: 6px;

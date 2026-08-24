@@ -120,6 +120,61 @@ export function mountHost(app) {
     scoreRows,
   ])
 
+  // 表示用の答えラベル（○×は記号に、4択は「2. 選択肢」の形にする）
+  function answerLabel(type, a, choices = []) {
+    if (a === '') return ''
+    if (type === 'ox') return a === 'o' ? '○' : '×'
+    if (type === 'choice4') {
+      const text = choices[Number(a) - 1] ?? ''
+      return text !== '' ? `${a}. ${text}` : a
+    }
+    return a
+  }
+
+  // 形式（早押し/○×/4択）に応じて中身が変わる答えの入力欄。
+  // 出題カードと問題セットの追加フォームで同じ部品を使う
+  function createAnswerFields(prefix) {
+    const answerInput = el('input', {
+      class: `input ${prefix}-a-input`, type: 'text', maxlength: 200,
+      placeholder: '答え（任意・判定結果で全員に表示）',
+    })
+    // 正解を先に決めておくと発表がワンタップになる。「未定」ならその場で選んで発表する
+    const oxSelect = el('select', { class: `input ${prefix}-ox-select` }, [
+      el('option', { value: '', text: '正解は未定（発表時に選ぶ）' }),
+      el('option', { value: 'o', text: '正解は ○' }),
+      el('option', { value: 'x', text: '正解は ×' }),
+    ])
+    const choiceInputs = ['1', '2', '3', '4'].map((n) =>
+      el('input', { class: `input ${prefix}-choice-input`, type: 'text', placeholder: `選択肢${n}`, maxlength: 100 }))
+    const correctSelect = el('select', { class: `input ${prefix}-correct-select` }, [
+      el('option', { value: '', text: '正解は未定（発表時に選ぶ）' }),
+      ...['1', '2', '3', '4'].map((n) => el('option', { value: n, text: `正解は ${n}` })),
+    ])
+    const row = el('div', { class: 'answer-fields' })
+
+    return {
+      row,
+      sync(type) {
+        if (type === 'ox') row.replaceChildren(oxSelect)
+        else if (type === 'choice4') row.replaceChildren(...choiceInputs, correctSelect)
+        else row.replaceChildren(answerInput)
+      },
+      // 入力値を { raw: 保存・判定に使う値, choices } で返す
+      read(type) {
+        if (type === 'ox') return { raw: oxSelect.value, choices: [] }
+        if (type === 'choice4') return { raw: correctSelect.value, choices: choiceInputs.map((i) => i.value) }
+        return { raw: answerInput.value, choices: [] }
+      },
+      clear() {
+        answerInput.value = ''
+        for (const input of choiceInputs) input.value = ''
+      },
+      setDisabled(disabled) {
+        for (const node of [answerInput, oxSelect, correctSelect, ...choiceInputs]) node.disabled = disabled
+      },
+    }
+  }
+
   // --- 進行画面の部品 ---
   const questionInput = el('textarea', {
     class: 'input question-input',
@@ -127,9 +182,19 @@ export function mountHost(app) {
     maxlength: CONFIG.questionMaxLen,
     placeholder: '問題文（空のまま口頭で読み上げてもOK）',
   })
+  // 答え・選択肢の入力（回答形式に合わせて中身が変わる）
+  const askFields = createAnswerFields('ask')
+
   const showBtn = el('button', { class: 'btn btn-primary', text: '問題を表示', onclick: () => {
     currentBankId = null // 手入力の出題はセットと紐付けない
-    game.showQuestion(questionInput.value)
+    const type = game.rules.answerMode
+    const { raw, choices } = askFields.read(type)
+    game.showQuestion({
+      text: questionInput.value,
+      answer: answerLabel(type, raw, choices),
+      choices,
+      plannedCorrect: type === 'buzzer' ? null : raw,
+    })
   } })
   // 誤って表示したときの取り消し（出題前に戻して問題文を編集できるようにする）
   const cancelBtn = el('button', { class: 'btn', text: '取り消し', onclick: () => game.cancelQuestion() })
@@ -181,13 +246,13 @@ export function mountHost(app) {
   const declareRow = el('div', { class: 'btn-row' })
 
   function buildDeclareButtons() {
-    // セットから出題した問題は正解が分かっているので、ワンタップで発表できる
-    const bankItem = currentBankId !== null ? bankItems.find((i) => i.id === currentBankId) : undefined
-    if (bankItem !== undefined && bankItem.type === game.rules.answerMode && bankItem.a !== '') {
+    // 正解が事前に分かっていれば（セットからの出題・答えを入力した出題）ワンタップで発表できる
+    if (game.plannedCorrect !== null) {
+      const label = game.answerText !== '' ? game.answerText : answerValueLabel(game.plannedCorrect)
       declareRow.replaceChildren(
-        el('button', { class: 'btn btn-ok', text: `正解を発表（${bankAnswerLabel(bankItem)}）`, onclick: () => {
+        el('button', { class: 'btn btn-ok', text: `正解を発表（${label}）`, onclick: () => {
           playCorrect()
-          game.declareCorrect(bankItem.a)
+          game.declareCorrect(game.plannedCorrect)
           recordOutcome()
         } }),
       )
@@ -500,62 +565,36 @@ export function mountHost(app) {
     questionInput.value = item.q // 出題中の問題文は入力欄に表示したままにする
     // 問題の形式に合わせて回答形式のルールも切り替える（4択の問題を早押しで出さない）
     if (game.rules.answerMode !== item.type) game.setAnswerMode(item.type)
-    game.showQuestion(item.q, bankAnswerLabel(item), item.choices) // 答えは判定結果のときに全員へ表示
+    game.showQuestion({
+      text: item.q,
+      answer: bankAnswerLabel(item), // 答えは判定結果のときに全員へ表示
+      choices: item.choices,
+      plannedCorrect: item.type === 'buzzer' ? null : item.a,
+    })
     bankOverlay.classList.add('hidden')
   }
 
-  // 表示用の答え（○×は記号に、4択は「2. 選択肢」の形にする）
-  function bankAnswerLabel(item) {
-    if (item.a === '') return ''
-    if (item.type === 'ox') return item.a === 'o' ? '○' : '×'
-    if (item.type === 'choice4') {
-      const index = Number(item.a) - 1
-      const text = item.choices[index] ?? ''
-      return text !== '' ? `${item.a}. ${text}` : item.a
-    }
-    return item.a
-  }
+  const bankAnswerLabel = (item) => answerLabel(item.type, item.a, item.choices)
 
   // --- 問題の追加フォーム（形式によって入力項目が変わる） ---
   const bankTypeSelect = el('select', { class: 'input bank-type-select' },
     QUESTION_TYPES.map((t) => el('option', { value: t, text: TYPE_LABEL[t] })))
   const bankQInput = el('textarea', { class: 'input bank-q-input', rows: '2', placeholder: '問題文', maxlength: CONFIG.questionMaxLen })
-  const bankAInput = el('input', { class: 'input bank-a-input', type: 'text', placeholder: '答え', maxlength: 200 })
-  const bankOxSelect = el('select', { class: 'input bank-ox-select' }, [
-    el('option', { value: 'o', text: '正解は ○' }),
-    el('option', { value: 'x', text: '正解は ×' }),
-  ])
-  const bankChoiceInputs = ['1', '2', '3', '4'].map((n) =>
-    el('input', { class: 'input bank-choice-input', type: 'text', placeholder: `選択肢${n}`, maxlength: 100 }))
-  const bankCorrectSelect = el('select', { class: 'input bank-correct-select' },
-    ['1', '2', '3', '4'].map((n) => el('option', { value: n, text: `正解は ${n}` })))
+  const bankFields = createAnswerFields('bank')
   const bankMemoInput = el('input', { class: 'input bank-memo-input', type: 'text', placeholder: 'メモ（判定基準など・任意）', maxlength: 500 })
 
-  const bankAnswerRow = el('div', { class: 'bank-answer-row' })
-  function syncBankForm() {
-    const type = bankTypeSelect.value
-    if (type === 'ox') bankAnswerRow.replaceChildren(bankOxSelect)
-    else if (type === 'choice4') bankAnswerRow.replaceChildren(...bankChoiceInputs, bankCorrectSelect)
-    else bankAnswerRow.replaceChildren(bankAInput)
-  }
-  bankTypeSelect.addEventListener('change', syncBankForm)
-  syncBankForm()
+  bankTypeSelect.addEventListener('change', () => bankFields.sync(bankTypeSelect.value))
+  bankFields.sync(bankTypeSelect.value)
 
   const bankAddBtn = el('button', { class: 'btn btn-primary btn-small', text: '追加', onclick: () => {
     const type = bankTypeSelect.value
-    const spec = { type, q: bankQInput.value, memo: bankMemoInput.value }
-    if (type === 'ox') spec.a = bankOxSelect.value
-    else if (type === 'choice4') {
-      spec.a = bankCorrectSelect.value
-      spec.choices = bankChoiceInputs.map((input) => input.value)
-    } else spec.a = bankAInput.value
-    const item = addQuestion(bankItems, spec)
+    const { raw, choices } = bankFields.read(type)
+    const item = addQuestion(bankItems, { type, q: bankQInput.value, a: raw, choices, memo: bankMemoInput.value })
     if (item === null) return
     saveBank(bankItems)
     bankQInput.value = ''
-    bankAInput.value = ''
     bankMemoInput.value = ''
-    for (const input of bankChoiceInputs) input.value = ''
+    bankFields.clear()
     renderBank()
     bankQInput.focus()
   } })
@@ -686,7 +725,7 @@ export function mountHost(app) {
         el('div', { class: 'bank-add' }, [
           el('div', { class: 'settings-row' }, [el('span', { text: '形式' }), bankTypeSelect]),
           bankQInput,
-          bankAnswerRow,
+          bankFields.row,
           bankMemoInput,
           bankAddBtn,
         ]),
@@ -724,6 +763,7 @@ export function mountHost(app) {
             el('span', { class: 'phase-side' }, [hostQBadge, phaseEl]),
           ]),
           questionInput,
+          askFields.row,
           currentQuestionEl,
           answerLine,
           answersLine,
@@ -750,6 +790,7 @@ export function mountHost(app) {
   let prevPhase = game.phase
   let revealTimer = null
   let lastDeclareMode = null
+  let lastAskFieldsMode = null
 
   function answerValueLabel(value) {
     if (game.rules.answerMode === 'ox') return value === 'o' ? '○' : '×'
@@ -787,7 +828,10 @@ export function mountHost(app) {
     if (game.phase === PHASE.LOCKED && prevPhase !== PHASE.LOCKED) playLock()
     // 判定が終わったら入力欄を空にして次の問題を受け付ける
     // （取り消しで WAITING に戻った場合は編集して出し直せるよう問題文を残す）
-    if (game.phase === PHASE.RESULT && prevPhase !== PHASE.RESULT) questionInput.value = ''
+    if (game.phase === PHASE.RESULT && prevPhase !== PHASE.RESULT) {
+      questionInput.value = ''
+      askFields.clear()
+    }
     prevPhase = game.phase
 
     const connectedCount = [...game.players.values()].filter((p) => p.connected).length
@@ -827,14 +871,22 @@ export function mountHost(app) {
     actionRow.replaceChildren(...actions)
     actionRow.style.display = actions.length === 0 ? 'none' : ''
     // 問題文は入力欄に表示したまま、出題中は編集できないようにする
-    questionInput.style.display = game.phase === PHASE.FINAL ? 'none' : ''
+    const inputsVisible = game.phase !== PHASE.FINAL
+    questionInput.style.display = inputsVisible ? '' : 'none'
     questionInput.disabled = !canAsk
+    // 答え・選択肢の入力欄は回答形式に追従させる
+    if (lastAskFieldsMode !== game.rules.answerMode) {
+      lastAskFieldsMode = game.rules.answerMode
+      askFields.sync(game.rules.answerMode)
+    }
+    askFields.row.style.display = inputsVisible ? '' : 'none'
+    askFields.setDisabled(!canAsk)
 
     // 一斉回答の正答宣言は締め切り後だけ
     const canDeclare = mass && game.phase === PHASE.LOCKED
     declareRow.style.display = canDeclare ? '' : 'none'
-    // 出題元が変わると「正解を発表」の中身も変わるため、問題も鍵に含める
-    const declareKey = `${game.rules.answerMode}:${currentBankId ?? ''}`
+    // 問題が変われば「正解を発表」の中身も変わるため、正解値も鍵に含める
+    const declareKey = `${game.rules.answerMode}:${game.plannedCorrect ?? ''}:${game.answerText}`
     if (mass && lastDeclareMode !== declareKey) {
       lastDeclareMode = declareKey
       buildDeclareButtons()

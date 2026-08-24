@@ -17,7 +17,8 @@ export class HostGame {
     this.qid = 0
     this.questionText = ''
     this.answerText = '' // 問題セットから出題したときの答え（判定結果でのみ配信）
-    this.choices = [] // 4択の選択肢（問題セットから出題したとき。全員に配信する）
+    this.choices = [] // 4択の選択肢（全員に配信する）
+    this.plannedCorrect = null // 一斉回答の正解値が事前に分かっている場合（発表に使う）
     this.armedAt = null
     this.presses = [] // { playerId, hostT }
     this.order = []
@@ -198,10 +199,15 @@ export class HostGame {
   }
 
   // 新しい問題を表示する（RESULT からの「次の問題」もこの操作）
-  showQuestion(text, answer = '', choices = []) {
+  //   text         : 問題文（空なら口頭で出題）
+  //   answer       : 表示用の答え（判定結果で全員に配信。空なら出さない）
+  //   choices      : 4択の選択肢（全員に配信）
+  //   plannedCorrect: 一斉回答の正解値（'o'|'x'|'1'〜'4'）。分かっていればワンタップで発表できる
+  showQuestion({ text = '', answer = '', choices = [], plannedCorrect = null } = {}) {
     this.questionText = text.trim().slice(0, CONFIG.questionMaxLen)
     this.answerText = answer.trim().slice(0, 200)
     this.choices = choices.slice(0, 4).map((c) => String(c).slice(0, 100))
+    this.plannedCorrect = this.#isValidAnswer(plannedCorrect) ? plannedCorrect : null
     this.qid += 1
     this.phase = PHASE.QUESTION
     this.armedAt = null
@@ -227,6 +233,7 @@ export class HostGame {
     this.questionText = ''
     this.answerText = ''
     this.choices = []
+    this.plannedCorrect = null
     this.revealBase = 0
     this.phase = PHASE.WAITING
     this.#changed()

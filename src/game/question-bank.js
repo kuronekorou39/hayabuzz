@@ -70,10 +70,16 @@ export function saveBank(items) {
   }
 }
 
+// 同じ形式・同じ問題文はひとつだけ持つ（取り込みを繰り返しても増殖しない）
+function findDuplicate(items, type, q) {
+  return items.find((item) => item.type === type && item.q === q) ?? null
+}
+
 export function addQuestion(items, { type = 'buzzer', q, a = '', choices = [], memo = '' }) {
   if (items.length >= MAX_ITEMS) return null
-  const item = sanitizeItem({ id: randomCode(8), type, q, a, choices, memo, history: [] })
-  if (item.q.trim() === '') return null
+  const item = sanitizeItem({ id: randomCode(8), type, q: q.trim(), a, choices, memo, history: [] })
+  if (item.q === '') return null
+  if (findDuplicate(items, item.type, item.q) !== null) return null
   items.push(item)
   return item
 }
@@ -82,8 +88,10 @@ export function addQuestion(items, { type = 'buzzer', q, a = '', choices = [], m
 //   早押し: 問題 / 答え / メモ
 //   ○×  : 問題 / ○ か × / メモ
 //   4択  : 問題 / 選択肢1 / 選択肢2 / 選択肢3 / 選択肢4 / 正解番号 / メモ
+// 戻り値は { added: 追加できた数, skipped: 重複などで飛ばした数 }
 export function importTsv(items, text) {
-  let count = 0
+  let added = 0
+  let skipped = 0
   for (const line of text.split('\n')) {
     const cells = line.split('\t').map((c) => c.trim())
     const q = cells[0] ?? ''
@@ -97,9 +105,10 @@ export function importTsv(items, text) {
     } else {
       spec = { type: 'buzzer', q, a: cells[1] ?? '', memo: cells[2] ?? '' }
     }
-    if (addQuestion(items, spec) !== null) count += 1
+    if (addQuestion(items, spec) !== null) added += 1
+    else skipped += 1
   }
-  return count
+  return { added, skipped }
 }
 
 export function removeQuestion(items, id) {
@@ -137,6 +146,23 @@ export function parseImport(text) {
   } catch {
     return null
   }
+}
+
+// 読み込んだ問題を取り込む。replace=true なら今の問題集を空にしてから入れ替える。
+// どちらの場合も同じ問題（形式+問題文が同じ）は取り込まない
+export function applyImport(items, incoming, { replace = false } = {}) {
+  if (replace) items.length = 0
+  let added = 0
+  let skipped = 0
+  for (const question of incoming) {
+    if (items.length >= MAX_ITEMS || findDuplicate(items, question.type, question.q) !== null) {
+      skipped += 1
+      continue
+    }
+    items.push(question)
+    added += 1
+  }
+  return { added, skipped }
 }
 
 export function setExportedAt(at) {

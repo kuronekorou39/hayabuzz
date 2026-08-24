@@ -6,6 +6,7 @@ import { PHASE, PHASE_LABEL } from '../game/phases.js'
 import { rankMark } from '../game/rank.js'
 import {
   addQuestion,
+  applyImport,
   exportPayload,
   getExportedAt,
   importTsv,
@@ -377,6 +378,9 @@ export function mountHost(app) {
   ])
   pressSoundSelect.addEventListener('change', () => game.setPressSound(pressSoundSelect.value))
 
+  const hideScoresCheck = el('input', { type: 'checkbox' })
+  hideScoresCheck.addEventListener('change', () => game.setHideScores(hideScoresCheck.checked))
+
   const rankBadgesSelect = el('select', { class: 'input' }, [
     el('option', { value: 'top3', text: '上位3人にメダル' }),
     el('option', { value: 'first', text: '1位に王冠' }),
@@ -477,6 +481,10 @@ export function mountHost(app) {
         el('label', { class: 'settings-row' }, [el('span', { text: '押下音' }), pressSoundSelect]),
         el('label', { class: 'settings-row' }, [el('span', { text: '勝ち抜けライン' }), winScoreSelect]),
         el('label', { class: 'settings-row' }, [el('span', { text: '順位マーク' }), rankBadgesSelect]),
+        el('label', { class: 'settings-row' }, [
+          el('span', { text: '得点を隠す（結果発表で公開）' }),
+          hideScoresCheck,
+        ]),
         el('label', { class: 'settings-row' }, [el('span', { text: '同名での復帰（得点引き継ぎ）' }), nickResumeCheck]),
         el('h2', { text: 'ハンデ（押下時刻に加算するms）' }),
         handicapPlaceholder,
@@ -492,6 +500,7 @@ export function mountHost(app) {
     revealSpeedSelect.value = String(game.rules.revealCps)
     pressSoundSelect.value = game.rules.pressSound
     rankBadgesSelect.value = game.rules.rankBadges
+    hideScoresCheck.checked = game.rules.hideScores
     nickResumeCheck.checked = game.rules.nickResume
     correctPointsSelect.value = String(game.rules.correctPoints)
     wrongPointsSelect.value = String(game.rules.wrongPoints)
@@ -546,6 +555,7 @@ export function mountHost(app) {
     if (r.teams > 0) parts.push(`${r.teams}チーム`)
     parts.push(r.wrongPoints === 0 ? `正解+${r.correctPoints}` : `+${r.correctPoints}/${r.wrongPoints}`)
     if (r.reveal === 'serial') parts.push('読み上げ')
+    if (r.hideScores) parts.push('得点非公開')
     if (hasCustomDetails()) parts.push('カスタム')
     ruleSummaryEl.textContent = parts.join(' · ')
   }
@@ -612,23 +622,30 @@ export function mountHost(app) {
       '○×: 問題／○ か ×／メモ\n' +
       '4択: 問題／選択肢1〜4／正解番号／メモ',
   })
-  const bankImportBtn = el('button', { class: 'btn btn-small', text: '取り込み', onclick: () => {
-    const count = importTsv(bankItems, bankPaste.value)
-    if (count > 0) {
-      saveBank(bankItems)
-      bankPaste.value = ''
-      renderBank()
-    }
-  } })
-
-  // お試し用のサンプル問題（既に同じ問題文があるものは追加しない）
-  const sampleBtn = el('button', { class: 'btn btn-small', text: 'サンプルを取り込む', onclick: () => {
-    for (const sample of SAMPLE_QUESTIONS) {
-      if (bankItems.some((item) => item.q === sample.q)) continue
-      addQuestion(bankItems, sample)
-    }
+  // 取り込み結果の案内（追加数と、重複などで飛ばした数）
+  const importNote = el('p', { class: 'placeholder import-note', text: '' })
+  function reportImport({ added, skipped }) {
+    const skip = skipped > 0 ? `（重複など ${skipped}問は取り込まず）` : ''
+    importNote.textContent = added > 0 ? `${added}問を取り込みました${skip}` : `取り込める問題がありませんでした${skip}`
     saveBank(bankItems)
     renderBank()
+  }
+
+  const bankImportBtn = el('button', { class: 'btn btn-small', text: '取り込み', onclick: () => {
+    const result = importTsv(bankItems, bankPaste.value)
+    if (result.added > 0) bankPaste.value = ''
+    reportImport(result)
+  } })
+
+  // お試し用のサンプル問題（同じ問題は重複して入らない）
+  const sampleBtn = el('button', { class: 'btn btn-small', text: 'サンプルを取り込む', onclick: () => {
+    let added = 0
+    let skipped = 0
+    for (const sample of SAMPLE_QUESTIONS) {
+      if (addQuestion(bankItems, sample) !== null) added += 1
+      else skipped += 1
+    }
+    reportImport({ added, skipped })
   } })
 
   const exportNote = el('p', { class: 'placeholder', text: '' })
@@ -641,6 +658,8 @@ export function mountHost(app) {
     setExportedAt(Date.now())
     renderBank()
   } })
+  // 既定は「今の問題集に足す」。チェックすると読み込む前に空にして入れ替える
+  const replaceCheck = el('input', { class: 'bank-replace-check', type: 'checkbox' })
   const importFileInput = el('input', { class: 'bank-file-input', type: 'file', accept: 'application/json' })
   importFileInput.addEventListener('change', () => {
     const file = importFileInput.files[0]
@@ -650,13 +669,10 @@ export function mountHost(app) {
     reader.onload = () => {
       const questions = parseImport(String(reader.result))
       if (questions === null) {
-        exportNote.textContent = '読み込めませんでした（エクスポートしたファイルを指定してください）'
+        importNote.textContent = '読み込めませんでした（エクスポートしたファイルを指定してください）'
         return
       }
-      bankItems.length = 0
-      bankItems.push(...questions)
-      saveBank(bankItems)
-      renderBank()
+      reportImport(applyImport(bankItems, questions, { replace: replaceCheck.checked }))
     }
     reader.readAsText(file)
   })
@@ -733,7 +749,13 @@ export function mountHost(app) {
       el('details', { class: 'rules-advanced' }, [
         el('summary', { text: '取り込み・書き出し' }),
         bankPaste,
-        el('div', { class: 'btn-row' }, [bankImportBtn, exportBtn, importLabel, sampleBtn]),
+        el('div', { class: 'btn-row' }, [bankImportBtn, sampleBtn]),
+        el('label', { class: 'settings-row' }, [
+          el('span', { text: 'ファイルから復元するとき、今の問題集を空にして入れ替える' }),
+          replaceCheck,
+        ]),
+        el('div', { class: 'btn-row' }, [exportBtn, importLabel]),
+        importNote,
         exportNote,
       ]),
     ]),

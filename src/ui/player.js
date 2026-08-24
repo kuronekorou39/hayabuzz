@@ -515,7 +515,13 @@ function startGame(app, roomCode, nick) {
 
   // 得点順の順位・順位マーク（判定ロジックは game/rank.js に共通化）
   const scoreRankOf = (p) => scoreRank(snapshot.players, p)
-  const rankMarkOf = (p) => rankMark(snapshot.players, p, snapshot.rules.rankBadges)
+  const rankMarkOf = (p) => (scoresHidden() ? '' : rankMark(snapshot.players, p, snapshot.rules.rankBadges))
+
+  // 「得点を隠す」ルール。結果発表では公開する（隠したまま終わっては盛り上がらない）
+  const scoresHidden = () => snapshot.rules.hideScores && snapshot.phase !== PHASE.FINAL
+  const scoreText = (score) => (scoresHidden() ? '?点' : `${score}点`)
+  // 得点を隠す設定では、通知からも点数を伏せる
+  const pointsText = (shown, hidden) => (scoresHidden() ? hidden : shown)
 
   // --- 状態描画（host から配信されたスナップショットを描くだけ） ---
   let lastScore = null
@@ -551,7 +557,7 @@ function startGame(app, roomCode, nick) {
     buzzer.style.display = mass ? 'none' : ''
     if (mass) {
       // 選択肢は問題ごとに変わるため、形式か選択肢が変わったら作り直す
-      const panelKey = `${snapshot.rules.answerMode}:${snapshot.choices.join(' ')}`
+      const panelKey = `${snapshot.rules.answerMode}:${snapshot.choices.join(' ')}`
       if (builtAnswerMode !== panelKey) {
         builtAnswerMode = panelKey
         buildAnswerPanel(snapshot.rules.answerMode, snapshot.choices)
@@ -656,9 +662,9 @@ function startGame(app, roomCode, nick) {
     const me = snapshot.players.find((p) => p.playerId === playerId)
     if (me !== undefined) {
       meNick.textContent = me.nick
-      meScoreEl.textContent = `${me.score}点`
-      meRankMain.textContent = `${scoreRankOf(me)}位`
-      meRankSub.textContent = `/${snapshot.players.length}人`
+      meScoreEl.textContent = scoreText(me.score)
+      meRankMain.textContent = scoresHidden() ? '' : `${scoreRankOf(me)}位`
+      meRankSub.textContent = scoresHidden() ? `${snapshot.players.length}人` : `/${snapshot.players.length}人`
       if (lastScore !== null && me.score !== lastScore) {
         meScoreEl.classList.remove('pop')
         void meScoreEl.offsetWidth
@@ -685,13 +691,14 @@ function startGame(app, roomCode, nick) {
       boardTotals.replaceChildren(
         ...teamTotals(snapshot.players, snapshot.rules.teams).map((t) => {
           const meta = teamMeta(t.team)
-          return el('span', { class: `team-chip ${meta.cls}`, text: `${meta.label} ${t.score}点` })
+          return el('span', { class: `team-chip ${meta.cls}`, text: `${meta.label} ${scoreText(t.score)}` })
         }),
       )
     } else {
       boardTotals.replaceChildren()
     }
-    const board = [...snapshot.players].sort((a, b) => b.score - a.score)
+    // 得点を隠す設定では並び順からも順位が読めてしまうため、参加順のまま並べる
+    const board = scoresHidden() ? [...snapshot.players] : [...snapshot.players].sort((a, b) => b.score - a.score)
     boardRows.replaceChildren(
       ...board.map((p) => {
         const meta = snapshot.rules.teams > 0 ? teamMeta(p.team) : null
@@ -702,13 +709,13 @@ function startGame(app, roomCode, nick) {
           ...(meta !== null ? [el('span', { class: `team-chip ${meta.cls}`, text: meta.label })] : []),
           el('span', { class: 'board-nick', text: p.nick }),
           ...(p.playerId === playerId ? [el('span', { class: 'you-chip', text: 'YOU' })] : []),
-          ...(snapshot.rules.winScore > 0 && p.score >= snapshot.rules.winScore
+          ...(!scoresHidden() && snapshot.rules.winScore > 0 && p.score >= snapshot.rules.winScore
             ? [el('span', { class: 'badge win', text: '勝ち抜け' })]
             : []),
           ...(p.handicapMs > 0
             ? [el('span', { class: 'handicap-note', text: `ハンデ+${p.handicapMs}ms` })]
             : []),
-          el('span', { class: 'board-score', text: `${p.score}点` }),
+          el('span', { class: 'board-score', text: scoreText(p.score) }),
         ])
       }),
     )
@@ -752,7 +759,7 @@ function startGame(app, roomCode, nick) {
         const winner = next.players.find((p) => p.playerId === next.result.playerId)
         showToast(
           next.result.playerId === playerId
-            ? `正解！ +${next.rules.correctPoints}点`
+            ? pointsText(`正解！ +${next.rules.correctPoints}点`, '正解！')
             : `${winner !== undefined ? winner.nick : '？'} さんが正解`,
           'ok',
         )
@@ -768,7 +775,7 @@ function startGame(app, roomCode, nick) {
         showToast('未回答', '')
       } else if (mine === next.correctValue) {
         playCorrect()
-        showToast(`正解！ +${next.rules.correctPoints}点`, 'ok')
+        showToast(pointsText(`正解！ +${next.rules.correctPoints}点`, '正解！'), 'ok')
       } else {
         playWrong()
         showToast('不正解…', 'ng')

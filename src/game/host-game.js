@@ -37,6 +37,7 @@ export class HostGame {
       teams: 0, // チーム数（0=個人戦、2〜4）
       answerMode: 'buzzer', // 回答形式: 'buzzer'=早押し / 'ox'=○× / 'choice4'=4択（一斉回答）
       rankBadges: 'top3', // 得点表の順位マーク: 'none'=なし / 'first'=1位に王冠 / 'top3'=上位3人にメダル
+      hideScores: false, // 回答者に得点・順位を見せない（結果発表で初めて公開する）
     }
     this.revealBase = 0 // 読み上げの確定位置（文字数）。押下で凍結し、再開放で続きから
     this.answers = new Map() // 一斉回答モードの回答（sessionId → 値。締切まで上書き可）
@@ -416,6 +417,11 @@ export class HostGame {
   setRankBadges(value) {
     if (!['none', 'first', 'top3'].includes(value)) return
     this.rules.rankBadges = value
+    this.#changed()
+  }
+
+  setHideScores(value) {
+    this.rules.hideScores = Boolean(value)
     this.#changed()
   }
 

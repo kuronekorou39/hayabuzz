@@ -88,6 +88,37 @@ test('チーム戦: 自動割り当て・他チームへの開放・チーム合
   await host.context.close()
 })
 
+test('得点を隠すルール: 回答者には点数が伏せられ、結果発表で公開される', async ({ browser }) => {
+  const host = await createRoom(browser)
+  const p1 = await joinPlayer(browser, host.code, 'たろう')
+
+  await host.page.getByRole('button', { name: 'ルール' }).click()
+  await host.page.locator('.rules-overlay .rules-advanced summary').click()
+  await host.page.locator('.settings-row', { hasText: '得点を隠す' }).locator('input').check()
+  await host.page.locator('.rules-overlay').getByRole('button', { name: '閉じる' }).click()
+
+  // 正解しても点数は「?点」のまま（トーストにも点数は出ない）
+  await askAndArm(host, '得点を隠すテスト')
+  await expect(p1.page.locator('.buzzer')).toHaveClass(/\barmed\b/)
+  await pressBuzzer(p1.page)
+  await host.page.getByRole('button', { name: '正解', exact: true }).click()
+  await expect(p1.page.locator('.toast.ok', { hasText: '正解！' })).toBeVisible()
+  await expect(p1.page.locator('.me-score')).toHaveText('?点')
+  await p1.page.getByRole('button', { name: '得点表' }).click()
+  await expect(p1.page.locator('.board-row', { hasText: 'たろう' })).toContainText('?点')
+  await p1.page.locator('.board-overlay').getByRole('button', { name: '閉じる' }).click()
+
+  // 出題者にはいつでも実際の得点が見えている
+  await expect(host.page.locator('.score-row', { hasText: 'たろう' }).locator('.score-value')).toHaveText('1')
+
+  // 結果発表で公開される
+  await host.page.getByRole('button', { name: '結果発表' }).click()
+  await expect(p1.page.locator('.final-overlay .board-row', { hasText: 'たろう' })).toContainText('1点')
+
+  await p1.context.close()
+  await host.context.close()
+})
+
 test('同名復帰ルールを無効にすると、同名でも別プレイヤーとして扱われる', async ({ browser }) => {
   const host = await createRoom(browser)
 

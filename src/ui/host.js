@@ -1,4 +1,4 @@
-import QRCode from 'qrcode'
+﻿import QRCode from 'qrcode'
 import { playCorrect, playLock, playWrong, setSoundEnabled, setSoundVolume, unlockAudio } from '../audio.js'
 import { CONFIG } from '../config.js'
 import { HostGame } from '../game/host-game.js'
@@ -33,11 +33,11 @@ export function mountHost(app) {
   const prefs = loadPrefs()
   setSoundEnabled(prefs.sound)
   setSoundVolume(prefs.volume)
-  // 問題セット等のブラウザ保存が自動削除されにくいよう永続化を要求（対応ブラウザのみ）
+  // 問題集等のブラウザ保存が自動削除されにくいよう永続化を要求（対応ブラウザのみ）
   navigator.storage?.persist?.().catch(() => {})
 
   const bankItems = loadBank()
-  let currentBankId = null // いま出題中のセット問題（答え・メモの手元表示と履歴記録に使う）
+  let currentBankId = null // いま出題中の問題集の問題（答え・メモの手元表示と履歴記録に使う）
   let outcomeRecorded = false
 
   const roomCode = randomCode(CONFIG.roomCodeLen)
@@ -132,7 +132,7 @@ export function mountHost(app) {
   }
 
   // 形式（早押し/○×/4択）に応じて中身が変わる答えの入力欄。
-  // 出題カードと問題セットの追加フォームで同じ部品を使う
+  // 出題カードと問題集の追加フォームで同じ部品を使う
   function createAnswerFields(prefix) {
     const answerInput = el('input', {
       class: `input ${prefix}-a-input`, type: 'text', maxlength: 200,
@@ -186,7 +186,7 @@ export function mountHost(app) {
   const askFields = createAnswerFields('ask')
 
   const showBtn = el('button', { class: 'btn btn-primary', text: '問題を表示', onclick: () => {
-    currentBankId = null // 手入力の出題はセットと紐付けない
+    currentBankId = null // 手入力の出題は問題集と紐付けない
     const type = game.rules.answerMode
     const { raw, choices } = askFields.read(type)
     game.showQuestion({
@@ -209,7 +209,7 @@ export function mountHost(app) {
   const orderList = el('ol', { class: 'order-list' })
   const orderPlaceholder = el('p', { class: 'placeholder', text: 'まだ誰も押していません' })
   const resultLine = el('p', { class: 'result-line hidden', text: '' })
-  // セット問題の判定結果（正解者・誤答者）をセットの履歴に書き込む
+  // 問題集の問題の判定結果（正解者・誤答者）を問題集の履歴に書き込む
   function recordOutcome() {
     if (outcomeRecorded || currentBankId === null) return
     if (game.phase !== PHASE.RESULT) return
@@ -246,7 +246,7 @@ export function mountHost(app) {
   const declareRow = el('div', { class: 'btn-row' })
 
   function buildDeclareButtons() {
-    // 正解が事前に分かっていれば（セットからの出題・答えを入力した出題）ワンタップで発表できる
+    // 正解が事前に分かっていれば（問題集からの出題・答えを入力した出題）ワンタップで発表できる
     if (game.plannedCorrect !== null) {
       const label = game.answerText !== '' ? game.answerText : answerValueLabel(game.plannedCorrect)
       declareRow.replaceChildren(
@@ -267,7 +267,7 @@ export function mountHost(app) {
         el('button', { class: 'btn btn-ok', text: option.label, onclick: () => {
           playCorrect()
           game.declareCorrect(option.value)
-          recordOutcome() // セットからの出題なら結果をセット履歴にも残す
+          recordOutcome() // 問題集からの出題なら結果を問題集の履歴にも残す
         } }),
       ),
     )
@@ -550,8 +550,8 @@ export function mountHost(app) {
     ruleSummaryEl.textContent = parts.join(' · ')
   }
 
-  // --- 問題セット（出題者の端末にのみ保存。正本はエクスポートしたファイル） ---
-  // セットから出題できるのは、手入力と同じく出題前と判定後だけ
+  // --- 問題集（出題者の端末にのみ保存。正本はエクスポートしたファイル） ---
+  // 問題集から出題できるのは、手入力と同じく出題前と判定後だけ
   function canAskNow() {
     return game.phase === PHASE.WAITING || game.phase === PHASE.RESULT
   }
@@ -716,7 +716,7 @@ export function mountHost(app) {
   const bankOverlay = popupOverlay(
     'bank-overlay',
     el('div', { class: 'card rules-card bank-card' }, [
-      el('h2', { text: '問題セット' }),
+      el('h2', { text: '問題集' }),
       bankNote,
       bankPlaceholder,
       bankRows,
@@ -738,7 +738,7 @@ export function mountHost(app) {
       ]),
     ]),
   )
-  const bankBtn = el('button', { class: 'btn btn-small', text: 'セット', onclick: () => {
+  const bankBtn = el('button', { class: 'btn btn-small', text: '問題集', onclick: () => {
     renderBank()
     bankOverlay.classList.remove('hidden')
   } })
@@ -892,7 +892,7 @@ export function mountHost(app) {
       buildDeclareButtons()
     }
 
-    // セット問題の答え・メモ（この端末にだけ表示。P2Pには流れない）
+    // 問題集の問題の答え・メモ（この端末にだけ表示。P2Pには流れない）
     const bankItem = currentBankId !== null ? bankItems.find((i) => i.id === currentBankId) : undefined
     if (bankItem !== undefined) {
       const parts = []

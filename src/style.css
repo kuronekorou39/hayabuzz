@@ -1060,13 +1060,16 @@ textarea.input {
   display: none;
 }
 
-/* ポップアップのカードを包み、右上の×をカードのスクロールと無関係に固定する */
+/* ポップアップのカードを包み、右上の×をカードのスクロールと無関係に固定する。
+   カード幅の基準になるよう、オーバーレイの余白を除いた幅いっぱいに広げる */
 .overlay-card-wrap {
   position: relative;
   display: flex;
   flex-direction: column;
+  width: 100%;
   max-width: 100%;
   min-height: 0;
+  align-items: center;
 }
 
 .overlay-close {
@@ -1104,8 +1107,10 @@ textarea.input {
   font-size: 1.2rem;
 }
 
+/* 縦積みの flex では max-width を持つ要素が左端に寄ってしまうため、
+   左右 auto マージンで中央に置く（margin-inline 非対応の旧ブラウザ向けに個別指定） */
 .overlay p {
-  margin: 0;
+  margin: 0 auto;
   color: var(--dim);
   max-width: 40ch;
   line-height: 1.7;
@@ -1131,14 +1136,16 @@ textarea.input {
   display: inline-block;
 }
 
+/* 幅の基準は画面幅ではなく「オーバーレイの余白を除いた実際に使える幅」。
+   vw 基準だと余白ぶんはみ出して、中央からずれてしまう */
 .overlay .share-card {
-  width: min(92vw, 360px);
+  width: min(100%, 360px);
   text-align: center;
 }
 
 .overlay .rules-card,
 .overlay .board-card {
-  width: min(92vw, 360px);
+  width: min(100%, 360px);
   max-height: 70vh;
   overflow-y: auto;
   overflow-x: hidden; /* 縦スクロール指定に伴う横スクロールバーを出さない */
@@ -1253,7 +1260,7 @@ textarea.input {
 
 /* 問題セット: 一覧を主役にする（追加・取り込みは折りたたみの中） */
 .overlay .bank-card {
-  width: min(94vw, 420px);
+  width: min(100%, 420px);
 }
 
 /* スクロールはカード側に任せる（入れ子スクロールは操作しづらい） */

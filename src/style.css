@@ -488,6 +488,8 @@ textarea.input {
   color: var(--dim);
   font-size: 0.85rem;
   margin: 0;
+  /* 折り返し時に最後の行だけ数文字残るのを防ぐ（非対応ブラウザでは従来どおり） */
+  text-wrap: balance;
 }
 
 .score-rows {
@@ -1107,6 +1109,7 @@ textarea.input {
   color: var(--dim);
   max-width: 40ch;
   line-height: 1.7;
+  text-wrap: balance;
 }
 
 /* 接続系オーバーレイの操作ボタンだけ幅を揃える（他のポップアップ内の
@@ -1115,12 +1118,17 @@ textarea.input {
   min-width: 12em;
 }
 
-/* 共有カードの案内文（参加のしかた） */
+/* 共有カードの案内文（参加のしかた）。
+   各かたまりを inline-block にして、かたまりの内部では折り返させない */
 .share-note {
   margin: 0;
   color: var(--dim);
   font-size: 0.82rem;
   line-height: 1.5;
+}
+
+.share-note > span {
+  display: inline-block;
 }
 
 .overlay .share-card {

@@ -90,7 +90,11 @@ export function mountHost(app) {
     el('div', { class: 'room-code', text: roomCode }),
     el('div', { class: 'url-row' }, [urlInput, copyBtn]),
     el('div', { class: 'qr-wrap' }, [qrCanvas]),
-    el('p', { class: 'share-note', text: '回答者はQRコードを読み取るか、このURLを開くと参加できます' }),
+    // 意味のかたまりごとに分けて、「参加／できます」のような中途半端な位置で折り返さないようにする
+    el('p', { class: 'share-note' }, [
+      el('span', { text: '回答者はQRコードを読み取るか、' }),
+      el('span', { text: 'URLを開くと参加できます' }),
+    ]),
   ])
 
   QRCode.toCanvas(qrCanvas, joinUrl, { width: 168, margin: 2 }).catch(() => {

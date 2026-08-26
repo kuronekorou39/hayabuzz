@@ -2,7 +2,7 @@
 import { playCorrect, playLock, playWrong, setSoundEnabled, setSoundVolume, unlockAudio } from '../audio.js'
 import { CONFIG } from '../config.js'
 import { HostGame } from '../game/host-game.js'
-import { PHASE, PHASE_LABEL } from '../game/phases.js'
+import { PHASE } from '../game/phases.js'
 import { rankMark } from '../game/rank.js'
 import {
   loadBank,
@@ -115,11 +115,16 @@ export function mountHost(app) {
   ])
   const scoreSheet = el('div', { class: 'score-sheet' }, [sheetHandle, sheetBody])
 
-  function toggleSheet() {
-    const open = scoreSheet.classList.toggle('open')
+  function setSheetOpen(open) {
+    scoreSheet.classList.toggle('open', open)
     sheetHandle.setAttribute('aria-expanded', String(open))
   }
-  sheetHandle.addEventListener('click', toggleSheet)
+  sheetHandle.addEventListener('click', () => setSheetOpen(!scoreSheet.classList.contains('open')))
+  // 開いたままだと出題の操作が隠れてしまうため、シートの外をタップしたら閉じる。
+  // シート内のクリックはここで止める（得点操作で一覧が作り直されると、クリック元の要素が
+  // DOM から外れて「外側のクリック」と誤判定されてしまうため、contains では判定しない）
+  scoreSheet.addEventListener('click', (ev) => ev.stopPropagation())
+  document.addEventListener('click', () => setSheetOpen(false))
 
   // --- 進行画面の部品 ---
   const questionInput = el('textarea', {
@@ -131,7 +136,7 @@ export function mountHost(app) {
   // 答え・選択肢の入力（回答形式に合わせて中身が変わる）
   const askFields = createAnswerFields('ask')
 
-  const showBtn = el('button', { class: 'btn btn-primary', text: '問題を表示', onclick: () => {
+  const showBtn = el('button', { class: 'btn btn-primary', text: '全員に出題', onclick: () => {
     const type = game.rules.answerMode
     const { raw, choices } = askFields.read(type)
     // 問題集から読み込んだ問題なら、実際に出したこの時点で出題履歴を積む
@@ -157,8 +162,53 @@ export function mountHost(app) {
   const stopBtn = el('button', { class: 'btn', text: '受付停止', onclick: () => game.stop() })
   const closeAnswersBtn = el('button', { class: 'btn', text: '締め切り', onclick: () => game.closeAnswers() })
 
-  const phaseEl = el('span', { class: 'phase-chip', text: PHASE_LABEL[PHASE.WAITING] })
   const hostQBadge = el('span', { class: 'q-badge ghost', text: '' })
+
+  // --- 進行のステップ表示（初見でも次に何をすればよいか分かるように） ---
+  const STEPS = ['問題を用意', '全員に出題', '早押し受付', '判定']
+  const MASS_STEPS = ['問題を用意', '全員に出題', '回答を受付', '正解を発表']
+  const stepEls = STEPS.map((_, i) =>
+    el('span', { class: 'step', 'data-step': String(i) }, [
+      el('span', { class: 'step-num', text: String(i + 1) }),
+      el('span', { class: 'step-label', text: '' }),
+    ]),
+  )
+  const stepBar = el('div', { class: 'step-bar' }, stepEls)
+  const stepHint = el('p', { class: 'step-hint', text: '' })
+
+  // いまどのステップにいるか（0始まり）
+  function currentStep() {
+    if (game.phase === PHASE.QUESTION) return 1
+    if (game.phase === PHASE.ARMED) return 2
+    if (game.phase === PHASE.LOCKED) return 3
+    return 0 // 出題前・判定後・結果発表中は「次の問題を用意する」段階
+  }
+
+  function renderSteps() {
+    const mass = game.isMassAnswerMode
+    const labels = mass ? MASS_STEPS : STEPS
+    const active = currentStep()
+    stepEls.forEach((node, i) => {
+      node.querySelector('.step-label').textContent = labels[i]
+      node.className = `step${i === active ? ' active' : ''}${i < active ? ' done' : ''}`
+    })
+    // いま何をすればよいかを1行で示す
+    const hints = mass
+      ? [
+          '問題と正解を入力して「全員に出題」を押します',
+          '全員が問題を読んだら「回答受付開始」へ',
+          '全員の回答がそろったら「締め切り」を押します',
+          '「正解を発表」で自動採点されます',
+        ]
+      : [
+          '問題を入力して「全員に出題」を押します（口頭で読むなら空のままでOK）',
+          '全員が問題を読んだら「早押し開始」へ',
+          '誰かが押すまで待ちます（押されると自動で判定へ進みます）',
+          '回答を聞いて「正解」か「誤答」を選びます',
+        ]
+    stepHint.textContent =
+      game.phase === PHASE.FINAL ? '結果発表中です。「ゲームに戻る」で続きから遊べます' : hints[active]
+  }
   const currentQuestionEl = el('div', { class: 'question-text question-clamp', text: 'まだ問題がありません' })
   const answerLine = el('p', { class: 'answer-note hidden', text: '' }) // 答え・メモ（出題者の手元のみ）
   const orderList = el('ol', { class: 'order-list' })
@@ -562,8 +612,10 @@ export function mountHost(app) {
           el('div', { class: 'topbar' }, [
             // 問題集は「出題」の隣に控えめに置く（出題の材料を選ぶ導線なので）
             el('span', { class: 'card-title' }, [el('h2', { text: '出題' }), bankBtn]),
-            el('span', { class: 'phase-side' }, [hostQBadge, phaseEl]),
+            hostQBadge,
           ]),
+          stepBar,
+          stepHint,
           questionInput,
           askFields.row,
           currentQuestionEl,
@@ -641,8 +693,7 @@ export function mountHost(app) {
     renderRuleSummary()
     updateCompatButton()
 
-    phaseEl.textContent = PHASE_LABEL[game.phase]
-    phaseEl.className = `phase-chip phase-${game.phase}`
+    renderSteps()
     const badgeVisible = game.qid > 0 && game.phase !== PHASE.FINAL
     hostQBadge.textContent = badgeVisible ? `Q${game.qid}` : ''
     hostQBadge.classList.toggle('ghost', !badgeVisible)
@@ -660,7 +711,7 @@ export function mountHost(app) {
     // 出題できるのは出題前と判定後だけ。表示中・受付中・判定中に出し直すと
     // 進行中の問題を壊すため、「取り消し」や「受付停止」で戻してから出し直す
     const canAsk = game.phase === PHASE.WAITING || game.phase === PHASE.RESULT
-    showBtn.textContent = game.phase === PHASE.RESULT ? '次の問題を表示' : '問題を表示'
+    showBtn.textContent = game.phase === PHASE.RESULT ? '次の問題を出題' : '全員に出題'
     armBtn.textContent = mass ? '回答受付開始' : '早押し開始'
     finishBtn.textContent = game.phase === PHASE.FINAL ? 'ゲームに戻る' : '結果発表'
 
@@ -672,6 +723,11 @@ export function mountHost(app) {
     if (!mass && (game.phase === PHASE.ARMED || game.phase === PHASE.LOCKED)) actions.push(stopBtn)
     actionRow.replaceChildren(...actions)
     actionRow.style.display = actions.length === 0 ? 'none' : ''
+    // 「次にこれを押す」1つだけを脈動させて迷わせない（判定は人の判断なので強調しない）
+    const nextUp = canAsk ? showBtn : game.phase === PHASE.QUESTION ? armBtn : mass && game.phase === PHASE.ARMED ? closeAnswersBtn : null
+    for (const button of [showBtn, armBtn, closeAnswersBtn]) {
+      button.classList.toggle('next-up', button === nextUp)
+    }
     // 問題文は入力欄に表示したまま、出題中は編集できないようにする
     const inputsVisible = game.phase !== PHASE.FINAL
     questionInput.style.display = inputsVisible ? '' : 'none'

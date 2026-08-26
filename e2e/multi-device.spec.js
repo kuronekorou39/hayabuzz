@@ -1,5 +1,5 @@
 ﻿import { devices, expect, test } from '@playwright/test'
-import { askAndArm, createRoom, joinPlayer, openScoreSheet, pressBuzzer } from './helpers.js'
+import { askAndArm, closeScoreSheet, createRoom, joinPlayer, openScoreSheet, pressBuzzer } from './helpers.js'
 
 // 全員の buzz を host に届かせる「同時押し」の再現。
 // 最初の押下が host に届いて LOCKED が配信されると他 player のボタンは無効化される
@@ -96,6 +96,7 @@ test('複数端末: 3人参加（1人はスマホ）で押下順・次点・再�
   await expect(first.page.locator('.me-summary')).toContainText('1点')
   await host.page.locator('.score-row', { hasText: first.nick }).getByRole('button', { name: '−' }).click()
   await expect(first.page.locator('.me-summary')).toContainText('0点')
+  await closeScoreSheet(host.page) // 開いたままだと出題の操作が隠れる
 
   // --- ルール: ハンデを付けた player は同時押しでも順位が下がる ---
   await host.page.getByRole('button', { name: 'ルール' }).click()

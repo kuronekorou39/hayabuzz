@@ -195,6 +195,93 @@ button {
   gap: 8px;
 }
 
+/* 出題の進行ステップ（初見でも流れが分かるように現在地を示す） */
+.step-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.step {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 2px;
+  border-radius: 8px;
+  background: var(--card-2);
+  color: var(--dim);
+  font-size: 0.68rem;
+  white-space: nowrap;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.step-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.step-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 済んだステップは控えめに、いまのステップははっきり見せる */
+.step.done {
+  color: var(--dim);
+  opacity: 0.6;
+}
+
+.step.active {
+  background: rgba(90, 140, 255, 0.2);
+  color: var(--fg);
+  font-weight: 700;
+}
+
+.step.active .step-num {
+  background: var(--primary);
+  color: #fff;
+}
+
+.step-hint {
+  margin: 0;
+  color: var(--dim);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-wrap: balance;
+}
+
+/* 次に押すボタンをそっと脈動させる */
+.btn.next-up {
+  animation: next-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes next-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(90, 140, 255, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(90, 140, 255, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn.next-up {
+    animation: none;
+  }
+}
+
 /* 出題履歴（問題・答え・正解者・誤答者） */
 .history-rows {
   display: flex;

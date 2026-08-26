@@ -23,7 +23,7 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   await expect(p1.page.locator('.q-badge')).toBeHidden() // まだ出題していない
 
   // 「問題を表示」で初めて配信される
-  await host.page.getByRole('button', { name: '問題を表示' }).click()
+  await host.page.getByRole('button', { name: '全員に出題' }).click()
   await expect(p1.page.locator('.question-text')).toContainText('富士山の標高は？')
   await expect(p1.page.locator('.q-badge')).toHaveText('Q1')
   // 出題中の問題文は入力欄に残る（編集はできない）
@@ -100,7 +100,7 @@ test('4択問題: 問題集に登録して出題すると選択肢が配信さ�
   await expect(host.page.locator('.ask-correct-select')).toHaveValue('3')
 
   // 出題すると選択肢が回答者に届く
-  await host.page.getByRole('button', { name: '問題を表示' }).click()
+  await host.page.getByRole('button', { name: '全員に出題' }).click()
   await expect(p1.page.locator('.answer-btn').nth(2)).toContainText('47')
   await host.page.waitForTimeout(2200)
   await host.page.getByRole('button', { name: '回答受付開始' }).click()

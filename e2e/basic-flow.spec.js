@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+﻿import { expect, test } from '@playwright/test'
 import { askAndArm, createRoom, joinPlayer, pressBuzzer } from './helpers.js'
 
 test('基本フロー: 参加→出題→早押し→正解→再接続→部屋終了', async ({ browser }) => {

@@ -5,22 +5,11 @@ import { HostGame } from '../game/host-game.js'
 import { PHASE, PHASE_LABEL } from '../game/phases.js'
 import { rankMark } from '../game/rank.js'
 import {
-  addQuestion,
-  applyImport,
-  exportPayload,
-  getExportedAt,
-  importTsv,
   loadBank,
   markAsked,
-  parseImport,
-  QUESTION_TYPES,
   recordOutcome as recordBankOutcome,
-  removeQuestion,
   saveBank,
-  setExportedAt,
-  TYPE_LABEL,
 } from '../game/question-bank.js'
-import { SAMPLE_QUESTIONS } from '../game/sample-questions.js'
 import { teamMeta, teamTotals } from '../game/teams.js'
 import { diagText } from '../net/diag.js'
 import { validateMessage } from '../net/protocol.js'
@@ -28,6 +17,7 @@ import { createTransport } from '../net/transport.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
 import { backdropDismiss, closeX, el, popupOverlay } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
+import { answerLabel, createAnswerFields, createBankPanel } from './question-bank-ui.js'
 
 export function mountHost(app) {
   unlockAudio() // トップ画面のクリック（ユーザー操作）を起点に AudioContext を有効化
@@ -130,61 +120,6 @@ export function mountHost(app) {
     sheetHandle.setAttribute('aria-expanded', String(open))
   }
   sheetHandle.addEventListener('click', toggleSheet)
-
-  // 表示用の答えラベル（○×は記号に、4択は「2. 選択肢」の形にする）
-  function answerLabel(type, a, choices = []) {
-    if (a === '') return ''
-    if (type === 'ox') return a === 'o' ? '○' : '×'
-    if (type === 'choice4') {
-      const text = choices[Number(a) - 1] ?? ''
-      return text !== '' ? `${a}. ${text}` : a
-    }
-    return a
-  }
-
-  // 形式（早押し/○×/4択）に応じて中身が変わる答えの入力欄。
-  // 出題カードと問題集の追加フォームで同じ部品を使う
-  function createAnswerFields(prefix) {
-    const answerInput = el('input', {
-      class: `input ${prefix}-a-input`, type: 'text', maxlength: 200,
-      placeholder: '答え（任意・判定結果で全員に表示）',
-    })
-    // 正解を先に決めておくと発表がワンタップになる。「未定」ならその場で選んで発表する
-    const oxSelect = el('select', { class: `input ${prefix}-ox-select` }, [
-      el('option', { value: '', text: '正解は未定（発表時に選ぶ）' }),
-      el('option', { value: 'o', text: '正解は ○' }),
-      el('option', { value: 'x', text: '正解は ×' }),
-    ])
-    const choiceInputs = ['1', '2', '3', '4'].map((n) =>
-      el('input', { class: `input ${prefix}-choice-input`, type: 'text', placeholder: `選択肢${n}`, maxlength: 100 }))
-    const correctSelect = el('select', { class: `input ${prefix}-correct-select` }, [
-      el('option', { value: '', text: '正解は未定（発表時に選ぶ）' }),
-      ...['1', '2', '3', '4'].map((n) => el('option', { value: n, text: `正解は ${n}` })),
-    ])
-    const row = el('div', { class: 'answer-fields' })
-
-    return {
-      row,
-      sync(type) {
-        if (type === 'ox') row.replaceChildren(oxSelect)
-        else if (type === 'choice4') row.replaceChildren(...choiceInputs, correctSelect)
-        else row.replaceChildren(answerInput)
-      },
-      // 入力値を { raw: 保存・判定に使う値, choices } で返す
-      read(type) {
-        if (type === 'ox') return { raw: oxSelect.value, choices: [] }
-        if (type === 'choice4') return { raw: correctSelect.value, choices: choiceInputs.map((i) => i.value) }
-        return { raw: answerInput.value, choices: [] }
-      },
-      clear() {
-        answerInput.value = ''
-        for (const input of choiceInputs) input.value = ''
-      },
-      setDisabled(disabled) {
-        for (const node of [answerInput, oxSelect, correctSelect, ...choiceInputs]) node.disabled = disabled
-      },
-    }
-  }
 
   // --- 進行画面の部品 ---
   const questionInput = el('textarea', {
@@ -596,181 +531,11 @@ export function mountHost(app) {
 
   const bankAnswerLabel = (item) => answerLabel(item.type, item.a, item.choices)
 
-  // --- 問題の追加フォーム（形式によって入力項目が変わる） ---
-  const bankTypeSelect = el('select', { class: 'input bank-type-select' },
-    QUESTION_TYPES.map((t) => el('option', { value: t, text: TYPE_LABEL[t] })))
-  const bankQInput = el('textarea', { class: 'input bank-q-input', rows: '2', placeholder: '問題文', maxlength: CONFIG.questionMaxLen })
-  const bankFields = createAnswerFields('bank')
-  const bankMemoInput = el('input', { class: 'input bank-memo-input', type: 'text', placeholder: 'メモ（判定基準など・任意）', maxlength: 500 })
-
-  bankTypeSelect.addEventListener('change', () => bankFields.sync(bankTypeSelect.value))
-  bankFields.sync(bankTypeSelect.value)
-
-  const bankAddBtn = el('button', { class: 'btn btn-primary btn-small', text: '追加', onclick: () => {
-    const type = bankTypeSelect.value
-    const { raw, choices } = bankFields.read(type)
-    const item = addQuestion(bankItems, { type, q: bankQInput.value, a: raw, choices, memo: bankMemoInput.value })
-    if (item === null) return
-    saveBank(bankItems)
-    bankQInput.value = ''
-    bankMemoInput.value = ''
-    bankFields.clear()
-    renderBank()
-    bankQInput.focus()
-  } })
-
-  const bankRows = el('div', { class: 'bank-rows' })
-  const bankPlaceholder = el('p', { class: 'placeholder', text: 'まだ問題がありません。下で追加するか、貼り付け取り込みが使えます。' })
-  const bankNote = el('p', { class: 'placeholder', text: '出題中は選べません（判定を終えるか、取り消してください）' })
-
-  const bankPaste = el('textarea', {
-    class: 'input bank-paste',
-    rows: '3',
-    placeholder:
-      '1行1問・タブ区切りで貼り付け（表計算からのコピペでOK）\n' +
-      '早押し: 問題／答え／メモ\n' +
-      '○×: 問題／○ か ×／メモ\n' +
-      '4択: 問題／選択肢1〜4／正解番号／メモ',
-  })
-  // 取り込み結果の案内（追加数と、重複などで飛ばした数）
-  const importNote = el('p', { class: 'placeholder import-note', text: '' })
-  function reportImport({ added, skipped }) {
-    const skip = skipped > 0 ? `（重複など ${skipped}問は取り込まず）` : ''
-    importNote.textContent = added > 0 ? `${added}問を取り込みました${skip}` : `取り込める問題がありませんでした${skip}`
-    saveBank(bankItems)
-    renderBank()
-  }
-
-  const bankImportBtn = el('button', { class: 'btn btn-small', text: '取り込み', onclick: () => {
-    const result = importTsv(bankItems, bankPaste.value)
-    if (result.added > 0) bankPaste.value = ''
-    reportImport(result)
-  } })
-
-  // お試し用のサンプル問題（同じ問題は重複して入らない）
-  const sampleBtn = el('button', { class: 'btn btn-small', text: 'サンプルを取り込む', onclick: () => {
-    let added = 0
-    let skipped = 0
-    for (const sample of SAMPLE_QUESTIONS) {
-      if (addQuestion(bankItems, sample) !== null) added += 1
-      else skipped += 1
-    }
-    reportImport({ added, skipped })
-  } })
-
-  const exportNote = el('p', { class: 'placeholder', text: '' })
-  const exportBtn = el('button', { class: 'btn btn-small', text: 'ファイルへエクスポート', onclick: () => {
-    const blob = new Blob([exportPayload(bankItems)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = el('a', { href: url, download: `hayabuzz-questions-${new Date().toISOString().slice(0, 10)}.json` })
-    link.click()
-    URL.revokeObjectURL(url)
-    setExportedAt(Date.now())
-    renderBank()
-  } })
-  // 既定は「今の問題集に足す」。チェックすると読み込む前に空にして入れ替える
-  const replaceCheck = el('input', { class: 'bank-replace-check', type: 'checkbox' })
-  const importFileInput = el('input', { class: 'bank-file-input', type: 'file', accept: 'application/json' })
-  importFileInput.addEventListener('change', () => {
-    const file = importFileInput.files[0]
-    importFileInput.value = ''
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const questions = parseImport(String(reader.result))
-      if (questions === null) {
-        importNote.textContent = '読み込めませんでした（エクスポートしたファイルを指定してください）'
-        return
-      }
-      reportImport(applyImport(bankItems, questions, { replace: replaceCheck.checked }))
-    }
-    reader.readAsText(file)
-  })
-  const importLabel = el('label', { class: 'btn btn-small' }, [
-    el('span', { text: 'ファイルから復元' }),
-    importFileInput,
-  ])
-
-  function formatAskedMeta(item) {
-    if (item.history.length === 0) return '未出題'
-    const last = item.history[item.history.length - 1]
-    const date = new Date(last.at)
-    const when = `${date.getMonth() + 1}/${date.getDate()}`
-    const winner = last.winner !== null ? ` ${last.winner}` : ' 正解者なし'
-    return `${item.history.length}回 · ${when}${winner}`
-  }
-
-  function renderBank() {
-    bankPlaceholder.style.display = bankItems.length === 0 ? '' : 'none'
-    const askable = canAskNow()
-    bankNote.style.display = askable ? 'none' : ''
-    bankRows.replaceChildren(
-      ...bankItems.map((item) => {
-        const answer = bankAnswerLabel(item)
-        return el('div', { class: 'bank-row' }, [
-          el('div', { class: 'bank-main' }, [
-            el('div', { class: 'bank-head' }, [
-              el('span', { class: `type-badge type-${item.type}`, text: TYPE_LABEL[item.type] }),
-              el('span', { class: 'bank-q', text: item.q }),
-            ]),
-            el('span', { class: 'bank-meta', text: `${answer !== '' ? `答え: ${answer} · ` : ''}${formatAskedMeta(item)}` }),
-          ]),
-          el('div', { class: 'bank-actions' }, [
-            el('button', {
-              class: 'btn btn-mini',
-              text: '出題',
-              disabled: !askable,
-              onclick: () => askFromBank(item),
-            }),
-            el('button', { class: 'btn btn-mini btn-ng', text: '削除', onclick: () => {
-              removeQuestion(bankItems, item.id)
-              saveBank(bankItems)
-              renderBank()
-            } }),
-          ]),
-        ])
-      }),
-    )
-    const exportedAt = getExportedAt()
-    exportNote.textContent =
-      exportedAt !== null
-        ? `最終エクスポート: ${new Date(exportedAt).toLocaleString()}（ブラウザ保存は消えることがあるため、定期的なエクスポートを推奨）`
-        : 'ブラウザ保存は消えることがあります。作ったらエクスポートしてファイルを正本にしてください'
-  }
-
-  // 一覧を主役にし、追加フォームと取り込み・書き出しは折りたたんでおく
-  const bankOverlay = popupOverlay(
-    'bank-overlay',
-    el('div', { class: 'card rules-card bank-card' }, [
-      el('h2', { text: '問題集' }),
-      bankNote,
-      bankPlaceholder,
-      bankRows,
-      el('details', { class: 'rules-advanced' }, [
-        el('summary', { text: '問題を追加' }),
-        el('div', { class: 'bank-add' }, [
-          el('div', { class: 'settings-row' }, [el('span', { text: '形式' }), bankTypeSelect]),
-          bankQInput,
-          bankFields.row,
-          bankMemoInput,
-          bankAddBtn,
-        ]),
-      ]),
-      el('details', { class: 'rules-advanced' }, [
-        el('summary', { text: '取り込み・書き出し' }),
-        bankPaste,
-        el('div', { class: 'btn-row' }, [bankImportBtn, sampleBtn]),
-        el('label', { class: 'settings-row' }, [
-          el('span', { text: 'ファイルから復元するとき、今の問題集を空にして入れ替える' }),
-          replaceCheck,
-        ]),
-        el('div', { class: 'btn-row' }, [exportBtn, importLabel]),
-        importNote,
-        exportNote,
-      ]),
-    ]),
-  )
-  const bankBtn = el('button', { class: 'btn btn-small', text: '問題集', onclick: () => {
+  // 問題集の UI は編集専用ページと共用（出題つきで組み立てる）
+  const bankPanel = createBankPanel({ items: bankItems, onAsk: askFromBank, canAsk: canAskNow })
+  const renderBank = bankPanel.render
+  const bankOverlay = popupOverlay('bank-overlay', bankPanel.root)
+  const bankBtn = el('button', { class: 'link-btn', text: '問題集から選ぶ', onclick: () => {
     renderBank()
     bankOverlay.classList.remove('hidden')
   } })
@@ -787,11 +552,12 @@ export function mountHost(app) {
   function showGame() {
     app.replaceChildren(
       el('div', { class: 'screen host-screen' }, [
-        topbar([bankBtn, shareBtn, settingsBtn]),
+        topbar([shareBtn, settingsBtn]),
         rulesBtn,
         el('div', { class: 'card' }, [
           el('div', { class: 'topbar' }, [
-            el('h2', { text: '出題' }),
+            // 問題集は「出題」の隣に控えめに置く（出題の材料を選ぶ導線なので）
+            el('span', { class: 'card-title' }, [el('h2', { text: '出題' }), bankBtn]),
             el('span', { class: 'phase-side' }, [hostQBadge, phaseEl]),
           ]),
           questionInput,

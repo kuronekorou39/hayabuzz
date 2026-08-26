@@ -1197,6 +1197,27 @@ textarea.input {
   cursor: pointer;
 }
 
+/* カード見出しの左側（見出し + 控えめなリンク） */
+.card-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* 枠なしの控えめなリンク風ボタン */
+.link-btn {
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 2px 0;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* トップバー等の枠なしアイコンボタン */
 .icon-btn {
   border: none;

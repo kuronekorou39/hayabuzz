@@ -7,7 +7,7 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   const p1 = await joinPlayer(browser, host.code, 'たろう')
 
   // 問題集に1問追加（追加フォームは折りたたみの中）
-  await host.page.getByRole('button', { name: '問題集', exact: true }).click()
+  await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
   await host.page.getByText('問題を追加').click()
   await host.page.locator('.bank-q-input').fill('富士山の標高は？')
   await host.page.locator('.bank-a-input').fill('3776m')
@@ -28,7 +28,7 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   await expect(p1.page.locator('body')).not.toContainText('3776m')
 
   // 出題中は問題集から選び直せない
-  await host.page.getByRole('button', { name: '問題集', exact: true }).click()
+  await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
   await expect(host.page.locator('.bank-row').getByRole('button', { name: '出題' })).toBeDisabled()
   await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
 
@@ -42,7 +42,7 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   // 判定結果になって初めて player 側に答えが表示される
   await expect(p1.page.locator('.phase-banner')).toContainText('答え：3776m')
 
-  await host.page.getByRole('button', { name: '問題集', exact: true }).click()
+  await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
   await expect(host.page.locator('.bank-row')).toContainText('たろう')
   await expect(host.page.locator('.bank-row')).toContainText('1回')
   await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
@@ -54,7 +54,7 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   await expect(host.page.locator('.history-overlay')).toContainText('答え: 3776m')
   await expect(host.page.locator('.history-overlay')).toContainText('正解: たろう')
   await host.page.locator('.history-overlay').getByRole('button', { name: '閉じる' }).click()
-  await host.page.getByRole('button', { name: '問題集', exact: true }).click()
+  await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
 
   // スプレッドシート形式（タブ区切り）の貼り付け取り込み（折りたたみの中）
   await host.page.getByText('取り込み・書き出し').click()
@@ -78,7 +78,7 @@ test('4択問題: 問題集に登録して出題すると選択肢が配信さ�
   const p1 = await joinPlayer(browser, host.code, 'たろう')
 
   // 4択の問題を登録（形式を選ぶと入力欄が選択肢+正解番号に変わる）
-  await host.page.getByRole('button', { name: '問題集', exact: true }).click()
+  await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
   await host.page.getByText('問題を追加').click()
   await host.page.locator('.bank-type-select').selectOption('choice4')
   await host.page.locator('.bank-q-input').fill('日本の都道府県はいくつ？')
@@ -104,7 +104,7 @@ test('4択問題: 問題集に登録して出題すると選択肢が配信さ�
   await expect(p1.page.locator('.me-summary')).toContainText('1点')
 
   // 問題集の履歴にも正解者が残る
-  await host.page.getByRole('button', { name: '問題集', exact: true }).click()
+  await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
   await expect(host.page.locator('.bank-row')).toContainText('たろう')
 
   await p1.context.close()

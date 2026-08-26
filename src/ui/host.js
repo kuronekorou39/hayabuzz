@@ -132,9 +132,14 @@ export function mountHost(app) {
   const askFields = createAnswerFields('ask')
 
   const showBtn = el('button', { class: 'btn btn-primary', text: '問題を表示', onclick: () => {
-    currentBankId = null // 手入力の出題は問題集と紐付けない
     const type = game.rules.answerMode
     const { raw, choices } = askFields.read(type)
+    // 問題集から読み込んだ問題なら、実際に出したこの時点で出題履歴を積む
+    if (currentBankId !== null) {
+      outcomeRecorded = false
+      markAsked(bankItems, currentBankId, Date.now())
+      saveBank(bankItems)
+    }
     game.showQuestion({
       text: questionInput.value,
       answer: answerLabel(type, raw, choices),
@@ -142,6 +147,10 @@ export function mountHost(app) {
       plannedCorrect: type === 'buzzer' ? null : raw,
     })
   } })
+  // 問題文を手で書き換えたら、問題集との紐付けを外す（別の問題になったとみなす）
+  questionInput.addEventListener('input', () => {
+    currentBankId = null
+  })
   // 誤って表示したときの取り消し（出題前に戻して問題文を編集できるようにする）
   const cancelBtn = el('button', { class: 'btn', text: '取り消し', onclick: () => game.cancelQuestion() })
   const armBtn = el('button', { class: 'btn btn-arm', text: '早押し開始', onclick: () => game.arm() })
@@ -511,30 +520,25 @@ export function mountHost(app) {
     return game.phase === PHASE.WAITING || game.phase === PHASE.RESULT
   }
 
-  function askFromBank(item) {
+  // 問題集から選んだ問題を入力欄に読み込む（この時点ではまだ回答者には出さない。
+  // 内容を確かめて必要なら直してから「問題を表示」で出題する）
+  function loadFromBank(item) {
     if (!canAskNow()) return // 進行中の問題を壊さない
     currentBankId = item.id
-    outcomeRecorded = false
-    markAsked(bankItems, item.id, Date.now())
-    saveBank(bankItems)
-    questionInput.value = item.q // 出題中の問題文は入力欄に表示したままにする
     // 問題の形式に合わせて回答形式のルールも切り替える（4択の問題を早押しで出さない）
     if (game.rules.answerMode !== item.type) game.setAnswerMode(item.type)
-    game.showQuestion({
-      text: item.q,
-      answer: bankAnswerLabel(item), // 答えは判定結果のときに全員へ表示
-      choices: item.choices,
-      plannedCorrect: item.type === 'buzzer' ? null : item.a,
-    })
+    questionInput.value = item.q
+    askFields.sync(item.type)
+    lastAskFieldsMode = item.type
+    askFields.setValues(item.type, { raw: item.a, choices: item.choices })
     bankOverlay.classList.add('hidden')
+    render()
   }
 
-  const bankAnswerLabel = (item) => answerLabel(item.type, item.a, item.choices)
-
   // 問題集の UI は編集専用ページと共用（出題つきで組み立てる）
-  const bankPanel = createBankPanel({ items: bankItems, onAsk: askFromBank, canAsk: canAskNow })
+  const bankPanel = createBankPanel({ items: bankItems, onAsk: loadFromBank, canAsk: canAskNow })
   const renderBank = bankPanel.render
-  const bankOverlay = popupOverlay('bank-overlay', bankPanel.root)
+  const bankOverlay = popupOverlay('bank-overlay', bankPanel.root, { wide: true })
   const bankBtn = el('button', { class: 'link-btn', text: '問題集から選ぶ', onclick: () => {
     renderBank()
     bankOverlay.classList.remove('hidden')
@@ -690,22 +694,11 @@ export function mountHost(app) {
       buildDeclareButtons()
     }
 
-    // 問題集の問題の答え・メモ（この端末にだけ表示。P2Pには流れない）
+    // 問題集のメモ（判定基準など）だけ手元に出す。答えと選択肢は入力欄に入っている
     const bankItem = currentBankId !== null ? bankItems.find((i) => i.id === currentBankId) : undefined
-    if (bankItem !== undefined) {
-      const parts = []
-      if (bankItem.type === 'choice4') {
-        // 選択肢は回答者にも配信されるが、出題者の手元でも読み上げられるように出す
-        parts.push(bankItem.choices.map((c, i) => `${i + 1}. ${c}`).join(' / '))
-      }
-      const answer = bankAnswerLabel(bankItem)
-      parts.push(`答え: ${answer !== '' ? answer : '（未記入）'}`)
-      if (bankItem.memo !== '') parts.push(`メモ: ${bankItem.memo}`)
-      answerLine.textContent = parts.join(' ／ ')
-      answerLine.className = 'answer-note'
-    } else {
-      answerLine.className = 'answer-note hidden'
-    }
+    const memo = bankItem !== undefined ? bankItem.memo : ''
+    answerLine.textContent = memo !== '' ? `メモ: ${memo}` : ''
+    answerLine.className = memo !== '' ? 'answer-note' : 'answer-note hidden'
     // 判定ボタンは誰かが押して判定できるときだけ出す（待機中の画面を静かに保つ）
     const canJudge = !mass && game.phase === PHASE.LOCKED && game.activePlayerId !== null
     judgeRow.style.display = canJudge ? '' : 'none'

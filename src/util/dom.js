@@ -20,10 +20,12 @@ export function closeX(overlay) {
 }
 
 // カード + 右上の× を持つポップアップを作る。カード自体はスクロールするため、
-// ×はスクロールしないラッパー側に置いて位置を固定する
-export function popupOverlay(overlayClass, card) {
+// ×はスクロールしないラッパー側に置いて位置を固定する。
+// ラッパーの幅はカードと同じにする（広げると × がカードから離れてしまう）。
+// wide=true は問題集のような横幅の広いカード用
+export function popupOverlay(overlayClass, card, { wide = false } = {}) {
   const overlay = el('div', { class: `overlay ${overlayClass} hidden` })
-  overlay.append(el('div', { class: 'overlay-card-wrap' }, [card, closeX(overlay)]))
+  overlay.append(el('div', { class: `overlay-card-wrap${wide ? ' wide' : ''}` }, [card, closeX(overlay)]))
   return overlay
 }
 

@@ -66,6 +66,16 @@ export function createAnswerFields(prefix) {
       answerInput.value = ''
       for (const input of choiceInputs) input.value = ''
     },
+    // 問題集から読み込んだ内容を入力欄に反映する
+    setValues(type, { raw = '', choices = [] } = {}) {
+      if (type === 'ox') oxSelect.value = raw
+      else if (type === 'choice4') {
+        correctSelect.value = raw
+        choiceInputs.forEach((input, i) => {
+          input.value = choices[i] ?? ''
+        })
+      } else answerInput.value = raw
+    },
     setDisabled(disabled) {
       for (const node of [answerInput, oxSelect, correctSelect, ...choiceInputs]) node.disabled = disabled
     },
@@ -111,6 +121,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   const bankRows = el('div', { class: 'bank-rows' })
   const bankPlaceholder = el('p', { class: 'placeholder', text: 'まだ問題がありません。下で追加するか、貼り付け取り込みが使えます。' })
   const bankNote = el('p', { class: 'placeholder', text: '出題中は選べません（判定を終えるか、取り消してください）' })
+  const bankHint = el('p', { class: 'placeholder', text: '「選ぶ」を押すと出題欄に読み込みます（出題は「問題を表示」で）' })
 
   const bankPaste = el('textarea', {
     class: 'input bank-paste',
@@ -196,9 +207,10 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
             el('span', { class: 'bank-meta', text: `${answer !== '' ? `答え: ${answer} · ` : ''}${formatAskedMeta(item)}` }),
           ]),
           el('div', { class: 'bank-actions' }, [
-            // 編集専用ページでは出題できないのでボタン自体を出さない
+            // 編集専用ページでは出題できないのでボタン自体を出さない。
+            // 押すと出題欄に読み込むだけで、出題は「問題を表示」で行う
             ...(onAsk !== null
-              ? [el('button', { class: 'btn btn-mini', text: '出題', disabled: !askable, onclick: () => onAsk(item) })]
+              ? [el('button', { class: 'btn btn-mini', text: '選ぶ', disabled: !askable, onclick: () => onAsk(item) })]
               : []),
             el('button', { class: 'btn btn-mini btn-ng', text: '削除', onclick: () => {
               removeQuestion(items, item.id)
@@ -220,6 +232,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   const root = el('div', { class: 'card rules-card bank-card' }, [
     el('h2', { text: '問題集' }),
     bankNote,
+    ...(onAsk !== null ? [bankHint] : []),
     bankPlaceholder,
     bankRows,
     el('details', { class: 'rules-advanced' }, [

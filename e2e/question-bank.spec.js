@@ -15,21 +15,25 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   await host.page.getByRole('button', { name: '追加' }).click()
   await expect(host.page.locator('.bank-row')).toHaveCount(1)
 
-  // 問題集の一覧から選んで出題 → player に問題文が配信され、host には答え・メモが手元表示される
-  await host.page.locator('.bank-row').getByRole('button', { name: '出題' }).click()
+  // 一覧から「選ぶ」= 出題欄に読み込むだけ。この時点ではまだ回答者には出ない
+  await host.page.locator('.bank-row').getByRole('button', { name: '選ぶ' }).click()
+  await expect(host.page.locator('.question-input')).toHaveValue('富士山の標高は？')
+  await expect(host.page.locator('.ask-a-input')).toHaveValue('3776m') // 答えも入力欄に入る
+  await expect(host.page.locator('.answer-note')).toContainText('メモ: メートル単位で回答')
+  await expect(p1.page.locator('.q-badge')).toBeHidden() // まだ出題していない
+
+  // 「問題を表示」で初めて配信される
+  await host.page.getByRole('button', { name: '問題を表示' }).click()
   await expect(p1.page.locator('.question-text')).toContainText('富士山の標高は？')
   await expect(p1.page.locator('.q-badge')).toHaveText('Q1')
-  await expect(host.page.locator('.answer-note')).toContainText('答え: 3776m')
-  await expect(host.page.locator('.answer-note')).toContainText('メートル単位で回答')
   // 出題中の問題文は入力欄に残る（編集はできない）
-  await expect(host.page.locator('.question-input')).toHaveValue('富士山の標高は？')
   await expect(host.page.locator('.question-input')).toBeDisabled()
   // player 側には答えは一切表示されない（DOM 全体に含まれない）
   await expect(p1.page.locator('body')).not.toContainText('3776m')
 
   // 出題中は問題集から選び直せない
   await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
-  await expect(host.page.locator('.bank-row').getByRole('button', { name: '出題' })).toBeDisabled()
+  await expect(host.page.locator('.bank-row').getByRole('button', { name: '選ぶ' })).toBeDisabled()
   await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
 
   // 判定まで進めると出題履歴に正解者名が残る
@@ -90,9 +94,13 @@ test('4択問題: 問題集に登録して出題すると選択肢が配信さ�
   await host.page.getByRole('button', { name: '追加' }).click()
   await host.page.getByText('問題を追加').click() // 追加フォームを閉じて一覧を見る
 
-  // 出題すると回答形式も4択に切り替わり、選択肢が回答者に届く
-  await host.page.locator('.bank-row').getByRole('button', { name: '出題' }).click()
-  await expect(host.page.locator('.answer-note')).toContainText('3. 47')
+  // 「選ぶ」で回答形式が4択に切り替わり、選択肢と正解が入力欄に読み込まれる
+  await host.page.locator('.bank-row').getByRole('button', { name: '選ぶ' }).click()
+  await expect(host.page.locator('.ask-choice-input').nth(2)).toHaveValue('47')
+  await expect(host.page.locator('.ask-correct-select')).toHaveValue('3')
+
+  // 出題すると選択肢が回答者に届く
+  await host.page.getByRole('button', { name: '問題を表示' }).click()
   await expect(p1.page.locator('.answer-btn').nth(2)).toContainText('47')
   await host.page.waitForTimeout(2200)
   await host.page.getByRole('button', { name: '回答受付開始' }).click()

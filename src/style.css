@@ -869,6 +869,113 @@ textarea.input {
   border-radius: 18px;
 }
 
+/* 出題者の参加者・得点シート。画面下に隠れ、取っ手をタップするとせり上がる。
+   閉じていても取っ手に参加人数とチーム合計が出るので、開かずに状況が分かる */
+.score-sheet {
+  --sheet-handle-h: 62px;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  max-height: 78vh;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
+  /* 閉じている間は取っ手だけを残して画面外へ下げる */
+  transform: translateY(calc(100% - var(--sheet-handle-h)));
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.score-sheet.open {
+  transform: translateY(0);
+}
+
+.sheet-handle {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  height: var(--sheet-handle-h);
+  padding: 8px 14px 0;
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* つまみ（引き出せることを示す横棒） */
+.sheet-grip {
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sheet-summary {
+  flex: none;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* 取っ手のチーム合計は余った幅にだけ出す（あふれたら隠す） */
+.sheet-head .team-totals {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  flex-wrap: nowrap;
+}
+
+.sheet-caret {
+  flex: none;
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 0.7rem;
+  transition: transform 0.28s ease;
+}
+
+.score-sheet.open .sheet-caret {
+  transform: rotate(180deg);
+}
+
+.sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 10px 14px calc(14px + env(safe-area-inset-bottom));
+}
+
+/* シートの取っ手に隠れないよう、出題者画面の下に余白を作る */
+.host-screen {
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .score-sheet,
+  .sheet-caret {
+    transition: none;
+  }
+}
+
 /* 下部バー（自分の得点の要約 + 得点表ボタン）。枠は持たず罫線1本のツールバー */
 .bottom-bar {
   display: flex;

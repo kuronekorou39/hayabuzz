@@ -1,6 +1,6 @@
 ﻿import { expect, test } from '@playwright/test'
 import { SAMPLE_QUESTIONS } from '../src/game/sample-questions.js'
-import { createRoom, joinPlayer, pressBuzzer } from './helpers.js'
+import { createRoom, joinPlayer, openScoreSheet, pressBuzzer } from './helpers.js'
 
 test('問題集: 追加→出題→答えの手元表示→正解者名の記録→貼り付け取り込み', async ({ browser }) => {
   const host = await createRoom(browser)
@@ -47,7 +47,8 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   await expect(host.page.locator('.bank-row')).toContainText('1回')
   await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
 
-  // セッションの出題履歴に問題・答え・正解者が残る
+  // セッションの出題履歴に問題・答え・正解者が残る（履歴は参加者シートの中）
+  await openScoreSheet(host.page)
   await host.page.getByRole('button', { name: '履歴', exact: true }).click()
   await expect(host.page.locator('.history-overlay')).toContainText('富士山の標高は？')
   await expect(host.page.locator('.history-overlay')).toContainText('答え: 3776m')

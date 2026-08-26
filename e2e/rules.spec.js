@@ -1,5 +1,5 @@
 ﻿import { expect, test } from '@playwright/test'
-import { askAndArm, createRoom, joinPlayer, pressBuzzer } from './helpers.js'
+import { askAndArm, createRoom, joinPlayer, openScoreSheet, pressBuzzer } from './helpers.js'
 
 const LONG_QUESTION =
   '江戸時代の五街道のうち、江戸日本橋を起点として内陸を通り京都三条大橋へ至る街道は何でしょう？'
@@ -112,6 +112,7 @@ test('得点を隠すルール: 回答者には点数が伏せられ、結果発
   await expect(host.page.locator('.score-row', { hasText: 'たろう' }).locator('.score-value')).toHaveText('1')
 
   // 結果発表で公開される
+  await openScoreSheet(host.page)
   await host.page.getByRole('button', { name: '結果発表' }).click()
   await expect(p1.page.locator('.final-overlay .board-row', { hasText: 'たろう' })).toContainText('1点')
 

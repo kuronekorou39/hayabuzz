@@ -114,16 +114,23 @@ export function mountHost(app) {
     }, 1500)
   }
 
-  // --- 参加者・得点カード（ロビーと進行画面で共用） ---
+  // --- 参加者・得点（画面下に隠せるシート。閉じていても取っ手に要約が出る） ---
   const scoreRows = el('div', { class: 'score-rows' })
   const scorePlaceholder = el('p', { class: 'placeholder', text: 'まだ参加者がいません' })
   const teamTotalsRow = el('div', { class: 'team-totals' })
-  const scoreCard = el('div', { class: 'card' }, [
-    el('h2', { text: '参加者・得点' }),
-    teamTotalsRow,
-    scorePlaceholder,
-    scoreRows,
+  const sheetSummary = el('span', { class: 'sheet-summary', text: '参加者 0人' })
+  const sheetBody = el('div', { class: 'sheet-body' }, [scorePlaceholder, scoreRows])
+  const sheetHandle = el('button', { class: 'sheet-handle', 'aria-expanded': 'false' }, [
+    el('span', { class: 'sheet-grip' }),
+    el('span', { class: 'sheet-head' }, [sheetSummary, teamTotalsRow, el('span', { class: 'sheet-caret', text: '▲' })]),
   ])
+  const scoreSheet = el('div', { class: 'score-sheet' }, [sheetHandle, sheetBody])
+
+  function toggleSheet() {
+    const open = scoreSheet.classList.toggle('open')
+    sheetHandle.setAttribute('aria-expanded', String(open))
+  }
+  sheetHandle.addEventListener('click', toggleSheet)
 
   // 表示用の答えラベル（○×は記号に、4択は「2. 選択肢」の形にする）
   function answerLabel(type, a, choices = []) {
@@ -317,8 +324,8 @@ export function mountHost(app) {
     historyOverlay.classList.remove('hidden')
   } })
 
-  // ゲーム全体の操作（出題の流れとは別軸なので得点カードにまとめる）
-  scoreCard.append(el('div', { class: 'btn-row' }, [historyBtn, finishBtn, resetScoresBtn]))
+  // ゲーム全体の操作（出題の流れとは別軸なので参加者シートにまとめる）
+  sheetBody.append(el('div', { class: 'btn-row' }, [historyBtn, finishBtn, resetScoresBtn]))
 
   // 端末設定（歯車）: 効果音の音量スライダー。動かし終わりに一鳴らしして確かめられる
   const volumeSlider = el('input', { type: 'range', min: '0', max: '100', step: '1' })
@@ -800,8 +807,8 @@ export function mountHost(app) {
           declareRow,
           actionRow,
         ]),
-        scoreCard,
       ]),
+      scoreSheet,
       shareOverlay,
       rulesOverlay,
       bankOverlay,
@@ -862,6 +869,7 @@ export function mountHost(app) {
 
     const connectedCount = [...game.players.values()].filter((p) => p.connected).length
     statusText.textContent = `${connectedCount}人` // 公開中であることは緑ランプが伝える
+    sheetSummary.textContent = `参加者 ${connectedCount}人`
     renderRuleSummary()
     updateCompatButton()
 

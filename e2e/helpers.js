@@ -24,6 +24,15 @@ export async function joinPlayer(browser, code, nick, contextOptions = {}) {
   return { context, page, nick }
 }
 
+// 出題者の参加者・得点シートを開く（得点操作・履歴・結果発表はこの中にある）。
+// 既に開いていれば何もしない
+export async function openScoreSheet(page) {
+  const sheet = page.locator('.score-sheet')
+  if (await sheet.evaluate((n) => n.classList.contains('open'))) return
+  await page.locator('.sheet-handle').click()
+  await expect(sheet).toHaveClass(/\bopen\b/)
+}
+
 // 早押しボタンを押す。タッチエミュレーション中の端末は tap（タッチイベント経路）で押す
 export async function pressBuzzer(page) {
   const isTouch = await page.evaluate(() => 'ontouchstart' in window)

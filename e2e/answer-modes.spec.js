@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test'
-import { createRoom, joinPlayer } from './helpers.js'
+﻿import { expect, test } from '@playwright/test'
+import { createRoom, joinPlayer, openScoreSheet } from './helpers.js'
 
 test('○×クイズ: 一斉回答→締め切り→正答発表で自動採点される', async ({ browser }) => {
   test.setTimeout(300_000)
@@ -70,7 +70,8 @@ test('結果発表: 最終ランキングが全端末に表示され、ゲーム
   const host = await createRoom(browser)
   const p1 = await joinPlayer(browser, host.code, 'たろう')
 
-  // 手動で1点付与してから結果発表
+  // 手動で1点付与してから結果発表（得点操作は参加者シートの中にある）
+  await openScoreSheet(host.page)
   await host.page.locator('.score-row', { hasText: 'たろう' }).getByRole('button', { name: '＋' }).click()
   await host.page.getByRole('button', { name: '結果発表' }).click()
   await expect(p1.page.locator('.final-overlay')).toBeVisible()

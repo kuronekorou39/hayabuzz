@@ -67,9 +67,8 @@ export function mountHost(app) {
     transport.leave()
   })
 
-  // --- 接続状態（ロビー/進行画面のヘッダーで共用） ---
+  // --- 接続状態（部屋を公開中であることを緑ランプで示す。人数は参加者シートの取っ手に出る） ---
   const statusDot = el('span', { class: 'dot on' })
-  const statusText = el('span', { class: 'status-text', text: '0人' })
 
   function topbar(extra = []) {
     return el('div', { class: 'topbar' }, [
@@ -77,7 +76,7 @@ export function mountHost(app) {
         el('span', { class: 'brand', text: 'Hayabuzz' }),
         el('span', { class: 'role', text: '出題者' }),
       ]),
-      el('div', { class: 'status' }, [statusDot, statusText, ...extra]),
+      el('div', { class: 'status' }, [statusDot, ...extra]),
     ])
   }
 
@@ -868,7 +867,6 @@ export function mountHost(app) {
     prevPhase = game.phase
 
     const connectedCount = [...game.players.values()].filter((p) => p.connected).length
-    statusText.textContent = `${connectedCount}人` // 公開中であることは緑ランプが伝える
     sheetSummary.textContent = `参加者 ${connectedCount}人`
     renderRuleSummary()
     updateCompatButton()

@@ -1,12 +1,14 @@
 # push / PR ごとにユニットテストと E2E（複数端末エミュレーション含む）を実行する。
-# E2E は実際に Trystero（BitTorrent トラッカー）経由で P2P 接続するため、
-# トラッカーの状態次第で稀に不安定になる（retries: 2 で吸収）。
+# E2E は公開トラッカー経由で実際に P2P 接続するため、トラッカーの状態次第で
+# 稀に不安定になる（retries: 2 で吸収）。
+# workflow_dispatch: GitHub 側の障害などで実行が滞ったときに手動で流し直すため。
 name: test
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:

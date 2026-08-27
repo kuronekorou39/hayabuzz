@@ -8,7 +8,7 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
 
   // 問題集に1問追加（追加フォームは折りたたみの中）
   await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
-  await host.page.locator('.bank-form > summary').click()
+  await host.page.locator('.form-toggle').click()
   await host.page.locator('.bank-q-input').fill('富士山の標高は？')
   await host.page.locator('.bank-a-input').fill('3776m')
   await host.page.locator('.bank-memo-input').fill('メートル単位で回答')
@@ -82,7 +82,7 @@ test('問題の編集: 一覧の「編集」でフォームに値が入り、保
 
   // ○×の問題を1問追加
   await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
-  await host.page.locator('.bank-form > summary').click()
+  await host.page.locator('.form-toggle').click()
   await host.page.locator('.bank-type-select').selectOption('ox')
   await host.page.locator('.bank-q-input').fill('富士山は日本一高い山である')
   await host.page.locator('.bank-ox-select').selectOption('o')
@@ -115,7 +115,7 @@ test('4択問題: 問題集に登録して出題すると選択肢が配信さ�
 
   // 4択の問題を登録（形式を選ぶと入力欄が選択肢+正解番号に変わる）
   await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
-  await host.page.locator('.bank-form > summary').click()
+  await host.page.locator('.form-toggle').click()
   await host.page.locator('.bank-type-select').selectOption('choice4')
   await host.page.locator('.bank-q-input').fill('日本の都道府県はいくつ？')
   const choices = ['43', '45', '47', '49']
@@ -124,7 +124,7 @@ test('4択問題: 問題集に登録して出題すると選択肢が配信さ�
   }
   await host.page.locator('.bank-correct-select').selectOption('3')
   await host.page.getByRole('button', { name: '追加する' }).click()
-  await host.page.locator('.bank-form > summary').click() // 追加フォームを閉じて一覧を見る
+  await host.page.locator('.form-toggle').click() // 追加フォームを閉じて一覧を見る
 
   // 「選ぶ」で回答形式が4択に切り替わり、選択肢と正解が入力欄に読み込まれる
   await host.page.locator('.bank-row').getByRole('button', { name: '選ぶ' }).click()

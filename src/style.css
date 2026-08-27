@@ -1273,6 +1273,7 @@ textarea.input {
   position: absolute;
   top: 2px;
   right: 2px;
+  z-index: 2; /* カード内の sticky 見出しより上に出す */
   width: 38px;
   height: 38px;
   display: flex;
@@ -1494,36 +1495,74 @@ textarea.input {
   text-align: left;
 }
 
-/* 追加・編集フォーム: 一覧をスクロールしても下端に貼り付いたままにする。
-   一覧と地続きに見えないよう、上方向に影を落として手前に浮かせる
-   （背景は入力欄と同化しないようカードと同じ色のまま） */
+/* 問題集は「一覧カード」と「追加・編集フォームのカード」の2枚組。
+   スクロールはこの入れ物が持ち、フォームは下端に貼り付く */
+.bank-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.overlay .bank-panel {
+  max-height: 74vh;
+}
+
+/* 一覧カードのスクロールは入れ物側に任せる（入れ子スクロールにしない） */
+.overlay .bank-panel .bank-card {
+  max-height: none;
+  overflow: visible;
+}
+
+/* スクロールしても見出しが残るようにする（×ボタンと同じ高さに並ぶ） */
+.bank-card > h2 {
+  position: sticky;
+  top: -12px;
+  z-index: 1;
+  margin: -12px -12px 0;
+  padding: 12px 12px 8px;
+  background: var(--card);
+}
+
+/* 追加・編集フォーム: 一覧の上に浮かせて、下端に貼り付ける */
 .bank-form {
   position: sticky;
   bottom: 0;
-  /* カードの左右パディングを打ち消して端まで広げる */
-  margin: 0 -12px;
+  z-index: 3; /* 一覧の sticky 見出しより手前に置く */
+  flex: none;
+  gap: 0;
   padding: 0 12px;
-  background: var(--card);
-  border-top: 1px solid var(--border);
+  border-color: var(--border);
   box-shadow: 0 -10px 22px rgba(0, 0, 0, 0.55);
   text-align: left;
 }
 
-/* 開いている間は編集中だと分かるように上端を色付きの帯にする */
-.bank-form[open] {
-  border-top: 2px solid var(--primary);
+/* 開いている間は編集中だと分かるように枠を色付きにする */
+.bank-form.open {
+  border-color: var(--primary);
 }
 
-.bank-form > summary {
+.form-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 12px 0;
+  background: transparent;
+  border: none;
   color: var(--primary);
+  font: inherit;
   font-size: 0.85rem;
   font-weight: 600;
+  text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+.bank-form.open .form-toggle {
+  color: var(--fg);
 }
 
 .form-plus {
@@ -1531,8 +1570,28 @@ textarea.input {
   line-height: 1;
 }
 
-.bank-form[open] > summary {
-  color: var(--fg);
+.form-caret {
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 0.7rem;
+  transition: transform 0.28s ease;
+}
+
+.bank-form.open .form-caret {
+  transform: rotate(180deg);
+}
+
+/* 開閉はスライドで見せる（周りのレイアウトは動かない） */
+.form-body {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.28s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s ease;
+}
+
+.bank-form.open .form-body {
+  max-height: 70vh;
+  opacity: 1;
 }
 
 .bank-form .bank-add {
@@ -1543,10 +1602,22 @@ textarea.input {
   display: none;
 }
 
-/* 編集専用ページ: カードを最後の要素にして、フォームを画面下端に貼り付ける */
+@media (prefers-reduced-motion: reduce) {
+  .form-body,
+  .form-caret {
+    transition: none;
+  }
+}
+
+/* 編集専用ページ: 画面の高さいっぱいを使い、フォームを下端に貼り付ける */
 .bank-page {
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.bank-page .bank-panel {
+  flex: 1;
 }
 
 .bank-row {

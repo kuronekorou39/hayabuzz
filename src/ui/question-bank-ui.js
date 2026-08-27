@@ -137,7 +137,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     formTitle.textContent = '問題を編集'
     bankAddBtn.textContent = '保存する'
     bankCancelBtn.classList.remove('hidden')
-    formDetails.open = true
+    setFormOpen(true)
     render()
     bankQInput.focus()
   }
@@ -269,9 +269,15 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
         : 'ブラウザ保存は消えることがあります。作ったらエクスポートしてファイルを正本にしてください'
   }
 
-  // 追加・編集フォームは下部に貼り付けて、一覧を見ながらいつでも開閉できるようにする
-  const formDetails = el('details', { class: 'bank-form' }, [
-    el('summary', {}, [el('span', { class: 'form-plus', text: '＋' }), formTitle]),
+  // 追加・編集フォームは一覧とは別のカードにして下部に貼り付ける。
+  // 一覧と地続きに見えないよう独立させ、開閉はスライドで見せる
+  const formCaret = el('span', { class: 'form-caret', text: '▲' })
+  const formToggle = el('button', { class: 'form-toggle', 'aria-expanded': 'false' }, [
+    el('span', { class: 'form-plus', text: '＋' }),
+    formTitle,
+    formCaret,
+  ])
+  const formBody = el('div', { class: 'form-body' }, [
     el('div', { class: 'bank-add' }, [
       el('div', { class: 'settings-row' }, [el('span', { text: '形式' }), bankTypeSelect]),
       bankQInput,
@@ -281,8 +287,15 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
       el('div', { class: 'btn-row' }, [bankAddBtn, bankCancelBtn]),
     ]),
   ])
+  const formCard = el('div', { class: 'card bank-form' }, [formToggle, formBody])
 
-  const root = el('div', { class: 'card rules-card bank-card' }, [
+  function setFormOpen(open) {
+    formCard.classList.toggle('open', open)
+    formToggle.setAttribute('aria-expanded', String(open))
+  }
+  formToggle.addEventListener('click', () => setFormOpen(!formCard.classList.contains('open')))
+
+  const listCard = el('div', { class: 'card rules-card bank-card' }, [
     el('h2', { text: '問題集' }),
     bankNote,
     ...(onAsk !== null ? [bankHint] : []),
@@ -300,8 +313,8 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
       importNote,
       exportNote,
     ]),
-    formDetails,
   ])
+  const root = el('div', { class: 'bank-panel' }, [listCard, formCard])
 
   render()
   return { root, render }

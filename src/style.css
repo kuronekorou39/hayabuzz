@@ -1494,7 +1494,9 @@ textarea.input {
   text-align: left;
 }
 
-/* 追加・編集フォーム: 一覧をスクロールしても下端に貼り付いたままにする */
+/* 追加・編集フォーム: 一覧をスクロールしても下端に貼り付いたままにする。
+   一覧と地続きに見えないよう、上方向に影を落として手前に浮かせる
+   （背景は入力欄と同化しないようカードと同じ色のまま） */
 .bank-form {
   position: sticky;
   bottom: 0;
@@ -1503,7 +1505,13 @@ textarea.input {
   padding: 0 12px;
   background: var(--card);
   border-top: 1px solid var(--border);
+  box-shadow: 0 -10px 22px rgba(0, 0, 0, 0.55);
   text-align: left;
+}
+
+/* 開いている間は編集中だと分かるように上端を色付きの帯にする */
+.bank-form[open] {
+  border-top: 2px solid var(--primary);
 }
 
 .bank-form > summary {
@@ -1525,11 +1533,10 @@ textarea.input {
 
 .bank-form[open] > summary {
   color: var(--fg);
-  border-bottom: 1px solid var(--border);
 }
 
 .bank-form .bank-add {
-  padding: 12px 0 14px;
+  padding: 4px 0 14px;
 }
 
 .bank-form-error:empty {

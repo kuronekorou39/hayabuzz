@@ -11,6 +11,7 @@ import {
   saveBank,
   setExportedAt,
   TYPE_LABEL,
+  updateQuestion,
 } from '../game/question-bank.js'
 import { SAMPLE_QUESTIONS } from '../game/sample-questions.js'
 import { el } from '../util/dom.js'
@@ -105,18 +106,56 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   bankTypeSelect.addEventListener('change', () => bankFields.sync(bankTypeSelect.value))
   bankFields.sync(bankTypeSelect.value)
 
-  const bankAddBtn = el('button', { class: 'btn btn-primary btn-small', text: '追加', onclick: () => {
-    const type = bankTypeSelect.value
-    const { raw, choices } = bankFields.read(type)
-    const item = addQuestion(items, { type, q: bankQInput.value, a: raw, choices, memo: bankMemoInput.value })
-    if (item === null) return
-    saveBank(items)
+  // 追加と編集で同じフォームを使う。editingId が null なら新規追加
+  let editingId = null
+  const formTitle = el('span', { class: 'form-title', text: '問題を追加' })
+  const formError = el('p', { class: 'form-error bank-form-error', text: '' })
+  const bankAddBtn = el('button', { class: 'btn btn-primary btn-small', text: '追加する' })
+  const bankCancelBtn = el('button', { class: 'btn btn-small hidden', text: 'やめる', onclick: () => resetForm() })
+
+  function resetForm() {
+    editingId = null
     bankQInput.value = ''
     bankMemoInput.value = ''
     bankFields.clear()
+    formError.textContent = ''
+    formTitle.textContent = '問題を追加'
+    bankAddBtn.textContent = '追加する'
+    bankCancelBtn.classList.add('hidden')
+    render()
+  }
+
+  // 一覧の「編集」から呼ぶ。フォームに値を入れて開く
+  function startEdit(item) {
+    editingId = item.id
+    bankTypeSelect.value = item.type
+    bankFields.sync(item.type)
+    bankFields.setValues(item.type, { raw: item.a, choices: item.choices })
+    bankQInput.value = item.q
+    bankMemoInput.value = item.memo
+    formError.textContent = ''
+    formTitle.textContent = '問題を編集'
+    bankAddBtn.textContent = '保存する'
+    bankCancelBtn.classList.remove('hidden')
+    formDetails.open = true
     render()
     bankQInput.focus()
-  } })
+  }
+
+  bankAddBtn.addEventListener('click', () => {
+    const type = bankTypeSelect.value
+    const { raw, choices } = bankFields.read(type)
+    const spec = { type, q: bankQInput.value, a: raw, choices, memo: bankMemoInput.value }
+    const saved = editingId !== null ? updateQuestion(items, editingId, spec) : addQuestion(items, spec)
+    if (saved === null) {
+      formError.textContent =
+        bankQInput.value.trim() === '' ? '問題文を入力してください' : '同じ形式・同じ問題文がすでにあります'
+      return
+    }
+    saveBank(items)
+    resetForm()
+    bankQInput.focus()
+  })
 
   const bankRows = el('div', { class: 'bank-rows' })
   const bankPlaceholder = el('p', { class: 'placeholder', text: 'まだ問題がありません。下で追加するか、貼り付け取り込みが使えます。' })
@@ -198,7 +237,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     bankRows.replaceChildren(
       ...items.map((item) => {
         const answer = answerLabel(item.type, item.a, item.choices)
-        return el('div', { class: 'bank-row' }, [
+        return el('div', { class: item.id === editingId ? 'bank-row editing' : 'bank-row' }, [
           el('div', { class: 'bank-main' }, [
             el('div', { class: 'bank-head' }, [
               el('span', { class: `type-badge type-${item.type}`, text: TYPE_LABEL[item.type] }),
@@ -208,14 +247,16 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
           ]),
           el('div', { class: 'bank-actions' }, [
             // 編集専用ページでは出題できないのでボタン自体を出さない。
-            // 押すと出題欄に読み込むだけで、出題は「問題を表示」で行う
+            // 押すと出題欄に読み込むだけで、出題は「全員に出題」で行う
             ...(onAsk !== null
               ? [el('button', { class: 'btn btn-mini', text: '選ぶ', disabled: !askable, onclick: () => onAsk(item) })]
               : []),
+            el('button', { class: 'btn btn-mini', text: '編集', onclick: () => startEdit(item) }),
             el('button', { class: 'btn btn-mini btn-ng', text: '削除', onclick: () => {
               removeQuestion(items, item.id)
               saveBank(items)
-              render()
+              if (editingId === item.id) resetForm()
+              else render()
             } }),
           ]),
         ])
@@ -228,23 +269,25 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
         : 'ブラウザ保存は消えることがあります。作ったらエクスポートしてファイルを正本にしてください'
   }
 
-  // 一覧を主役にし、追加フォームと取り込み・書き出しは折りたたんでおく
+  // 追加・編集フォームは下部に貼り付けて、一覧を見ながらいつでも開閉できるようにする
+  const formDetails = el('details', { class: 'bank-form' }, [
+    el('summary', {}, [el('span', { class: 'form-plus', text: '＋' }), formTitle]),
+    el('div', { class: 'bank-add' }, [
+      el('div', { class: 'settings-row' }, [el('span', { text: '形式' }), bankTypeSelect]),
+      bankQInput,
+      bankFields.row,
+      bankMemoInput,
+      formError,
+      el('div', { class: 'btn-row' }, [bankAddBtn, bankCancelBtn]),
+    ]),
+  ])
+
   const root = el('div', { class: 'card rules-card bank-card' }, [
     el('h2', { text: '問題集' }),
     bankNote,
     ...(onAsk !== null ? [bankHint] : []),
     bankPlaceholder,
     bankRows,
-    el('details', { class: 'rules-advanced' }, [
-      el('summary', { text: '問題を追加' }),
-      el('div', { class: 'bank-add' }, [
-        el('div', { class: 'settings-row' }, [el('span', { text: '形式' }), bankTypeSelect]),
-        bankQInput,
-        bankFields.row,
-        bankMemoInput,
-        bankAddBtn,
-      ]),
-    ]),
     el('details', { class: 'rules-advanced' }, [
       el('summary', { text: '取り込み・書き出し' }),
       bankPaste,
@@ -257,6 +300,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
       importNote,
       exportNote,
     ]),
+    formDetails,
   ])
 
   render()

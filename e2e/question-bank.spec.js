@@ -8,11 +8,11 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
 
   // 問題集に1問追加（追加フォームは折りたたみの中）
   await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
-  await host.page.getByText('問題を追加').click()
+  await host.page.locator('.bank-form > summary').click()
   await host.page.locator('.bank-q-input').fill('富士山の標高は？')
   await host.page.locator('.bank-a-input').fill('3776m')
   await host.page.locator('.bank-memo-input').fill('メートル単位で回答')
-  await host.page.getByRole('button', { name: '追加' }).click()
+  await host.page.getByRole('button', { name: '追加する' }).click()
   await expect(host.page.locator('.bank-row')).toHaveCount(1)
 
   // 一覧から「選ぶ」= 出題欄に読み込むだけ。この時点ではまだ回答者には出ない
@@ -77,13 +77,45 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   await host.context.close()
 })
 
+test('問題の編集: 一覧の「編集」でフォームに値が入り、保存すると一覧に反映される', async ({ browser }) => {
+  const host = await createRoom(browser)
+
+  // ○×の問題を1問追加
+  await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
+  await host.page.locator('.bank-form > summary').click()
+  await host.page.locator('.bank-type-select').selectOption('ox')
+  await host.page.locator('.bank-q-input').fill('富士山は日本一高い山である')
+  await host.page.locator('.bank-ox-select').selectOption('o')
+  await host.page.getByRole('button', { name: '追加する' }).click()
+  await expect(host.page.locator('.bank-row')).toHaveCount(1)
+
+  // 「編集」を押すとフォームに値が入った状態で開く
+  await host.page.locator('.bank-row').getByRole('button', { name: '編集' }).click()
+  await expect(host.page.locator('.bank-q-input')).toHaveValue('富士山は日本一高い山である')
+  await expect(host.page.locator('.bank-type-select')).toHaveValue('ox')
+  await expect(host.page.locator('.bank-ox-select')).toHaveValue('o')
+  await expect(host.page.locator('.bank-row')).toHaveClass(/\bediting\b/) // 編集中が一覧でも分かる
+
+  // 書き換えて保存 → 一覧に反映され、増えない
+  await host.page.locator('.bank-q-input').fill('富士山は世界一高い山である')
+  await host.page.locator('.bank-ox-select').selectOption('x')
+  await host.page.getByRole('button', { name: '保存する' }).click()
+  await expect(host.page.locator('.bank-row')).toHaveCount(1)
+  await expect(host.page.locator('.bank-row')).toContainText('富士山は世界一高い山である')
+  await expect(host.page.locator('.bank-row')).toContainText('答え: ×')
+  // 保存後は新規追加のフォームに戻る
+  await expect(host.page.getByRole('button', { name: '追加する' })).toBeVisible()
+
+  await host.context.close()
+})
+
 test('4択問題: 問題集に登録して出題すると選択肢が配信され、正解を1タップで発表できる', async ({ browser }) => {
   const host = await createRoom(browser)
   const p1 = await joinPlayer(browser, host.code, 'たろう')
 
   // 4択の問題を登録（形式を選ぶと入力欄が選択肢+正解番号に変わる）
   await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
-  await host.page.getByText('問題を追加').click()
+  await host.page.locator('.bank-form > summary').click()
   await host.page.locator('.bank-type-select').selectOption('choice4')
   await host.page.locator('.bank-q-input').fill('日本の都道府県はいくつ？')
   const choices = ['43', '45', '47', '49']
@@ -91,8 +123,8 @@ test('4択問題: 問題集に登録して出題すると選択肢が配信さ�
     await host.page.locator('.bank-choice-input').nth(i).fill(value)
   }
   await host.page.locator('.bank-correct-select').selectOption('3')
-  await host.page.getByRole('button', { name: '追加' }).click()
-  await host.page.getByText('問題を追加').click() // 追加フォームを閉じて一覧を見る
+  await host.page.getByRole('button', { name: '追加する' }).click()
+  await host.page.locator('.bank-form > summary').click() // 追加フォームを閉じて一覧を見る
 
   // 「選ぶ」で回答形式が4択に切り替わり、選択肢と正解が入力欄に読み込まれる
   await host.page.locator('.bank-row').getByRole('button', { name: '選ぶ' }).click()

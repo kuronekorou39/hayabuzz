@@ -1475,26 +1475,87 @@ textarea.input {
   min-width: 0;
 }
 
-/* 問題セット: 一覧を主役にする（追加・取り込みは折りたたみの中） */
+/* 問題集: 一覧を主役にし、追加・編集フォームは下部に貼り付ける */
 .overlay .bank-card {
   width: 100%;
+}
+
+/* フォームがカード下端に貼り付くので、その下に余白は持たせない */
+.bank-card {
+  gap: 14px;
+  padding-bottom: 0;
 }
 
 /* スクロールはカード側に任せる（入れ子スクロールは操作しづらい） */
 .bank-rows {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   text-align: left;
+}
+
+/* 追加・編集フォーム: 一覧をスクロールしても下端に貼り付いたままにする */
+.bank-form {
+  position: sticky;
+  bottom: 0;
+  /* カードの左右パディングを打ち消して端まで広げる */
+  margin: 0 -12px;
+  padding: 0 12px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  text-align: left;
+}
+
+.bank-form > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  color: var(--primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.form-plus {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.bank-form[open] > summary {
+  color: var(--fg);
+  border-bottom: 1px solid var(--border);
+}
+
+.bank-form .bank-add {
+  padding: 12px 0 14px;
+}
+
+.bank-form-error:empty {
+  display: none;
+}
+
+/* 編集専用ページ: カードを最後の要素にして、フォームを画面下端に貼り付ける */
+.bank-page {
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .bank-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   background: var(--card-2);
+  border: 1px solid transparent;
   border-radius: 10px;
-  padding: 8px 10px;
+  padding: 12px;
+}
+
+/* 編集中の問題は一覧でも分かるようにする */
+.bank-row.editing {
+  border-color: var(--primary);
+  background: rgba(90, 140, 255, 0.1);
 }
 
 .bank-main {

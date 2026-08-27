@@ -111,6 +111,18 @@ export function importTsv(items, text) {
   return { added, skipped }
 }
 
+// 既存の問題を書き換える（出題履歴は保つ）。問題文が空、または他の問題と
+// 同じ形式・同じ問題文になる場合は変更しない
+export function updateQuestion(items, id, { type = 'buzzer', q, a = '', choices = [], memo = '' }) {
+  const item = items.find((i) => i.id === id)
+  if (item === undefined) return null
+  const updated = sanitizeItem({ id: item.id, type, q: q.trim(), a, choices, memo, history: item.history })
+  if (updated.q === '') return null
+  if (items.some((other) => other.id !== id && other.type === updated.type && other.q === updated.q)) return null
+  Object.assign(item, updated)
+  return item
+}
+
 export function removeQuestion(items, id) {
   const index = items.findIndex((item) => item.id === id)
   if (index >= 0) items.splice(index, 1)

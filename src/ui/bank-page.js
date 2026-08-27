@@ -15,8 +15,9 @@ export function mountBankPage(app, { onBack }) {
         ]),
         el('button', { class: 'btn btn-small', text: 'トップへ戻る', onclick: onBack }),
       ]),
-      panel.root,
+      // 説明はカードの前に置く（カードを最後の要素にして、下部のフォームを画面下端に貼り付ける）
       el('p', { class: 'placeholder', text: 'ここで作った問題は、出題者画面の「問題集」からそのまま出題できます' }),
+      panel.root,
     ]),
   )
 }

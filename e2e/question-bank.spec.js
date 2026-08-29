@@ -61,16 +61,16 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
 
   // スプレッドシート形式（タブ区切り）の貼り付け取り込み（折りたたみの中）
-  await host.page.getByText('取り込み・書き出し').click()
+  await host.page.getByText('まとめて入れる・持ち出す').click()
   await host.page.locator('.bank-paste').fill('Q2\tA2\nQ3\tA3\tメモ3')
-  await host.page.getByRole('button', { name: '取り込み', exact: true }).click()
+  await host.page.getByRole('button', { name: '貼り付けから追加' }).click()
   await expect(host.page.locator('.bank-row')).toHaveCount(3)
 
   // サンプルの取り込み（既存3問 + サンプル。再度押しても重複しない）
   const withSamples = 3 + SAMPLE_QUESTIONS.length
-  await host.page.getByRole('button', { name: 'サンプルを取り込む' }).click()
+  await host.page.getByRole('button', { name: 'サンプルを入れる' }).click()
   await expect(host.page.locator('.bank-row')).toHaveCount(withSamples)
-  await host.page.getByRole('button', { name: 'サンプルを取り込む' }).click()
+  await host.page.getByRole('button', { name: 'サンプルを入れる' }).click()
   await expect(host.page.locator('.bank-row')).toHaveCount(withSamples)
 
   await p1.context.close()

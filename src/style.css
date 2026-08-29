@@ -1602,6 +1602,92 @@ textarea.input {
   display: none;
 }
 
+/* 取り込み・書き出し: 「貼り付けて追加」と「ファイル」を節に分ける */
+.bank-io {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.io-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 0 4px;
+  text-align: left;
+}
+
+.io-section + .io-section {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.io-title {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.io-note {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.55;
+  color: var(--dim);
+}
+
+/* 貼り付けの書式一覧（形式バッジ + 列の並び） */
+.io-formats {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 8px 10px;
+  list-style: none;
+  background: var(--bg);
+  border-radius: 8px;
+  font-size: 0.73rem;
+  color: var(--dim);
+}
+
+.io-formats li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.io-formats .type-badge {
+  min-width: 3.4em;
+  text-align: center;
+}
+
+.export-note.warn {
+  color: var(--warn);
+}
+
+.io-replace {
+  font-size: 0.9em;
+}
+
+/* 取り込み結果の案内（成功・失敗で色を変える） */
+.import-note {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  text-align: left;
+}
+
+.import-note:empty {
+  display: none;
+}
+
+.import-note.ok {
+  color: var(--ok);
+}
+
+.import-note.ng {
+  color: var(--warn);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .form-body,
   .form-caret {

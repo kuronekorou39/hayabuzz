@@ -1,4 +1,4 @@
-import { CONFIG } from '../config.js'
+﻿import { CONFIG } from '../config.js'
 import {
   addQuestion,
   applyImport,
@@ -158,47 +158,50 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   })
 
   const bankRows = el('div', { class: 'bank-rows' })
-  const bankPlaceholder = el('p', { class: 'placeholder', text: 'まだ問題がありません。下で追加するか、貼り付け取り込みが使えます。' })
+  const bankPlaceholder = el('p', { class: 'placeholder', text: 'まだ問題がありません。下の「問題を追加」か、まとめて貼り付けて入れられます' })
   const bankNote = el('p', { class: 'placeholder', text: '出題中は選べません（判定を終えるか、取り消してください）' })
-  const bankHint = el('p', { class: 'placeholder', text: '「選ぶ」を押すと出題欄に読み込みます（出題は「問題を表示」で）' })
+  const bankHint = el('p', { class: 'placeholder', text: '「選ぶ」を押すと出題欄に読み込みます（出題は「全員に出題」で）' })
 
   const bankPaste = el('textarea', {
     class: 'input bank-paste',
     rows: '3',
-    placeholder:
-      '1行1問・タブ区切りで貼り付け（表計算からのコピペでOK）\n' +
-      '早押し: 問題／答え／メモ\n' +
-      '○×: 問題／○ か ×／メモ\n' +
-      '4択: 問題／選択肢1〜4／正解番号／メモ',
+    placeholder: 'ここに貼り付け',
   })
   // 取り込み結果の案内（追加数と、重複などで飛ばした数）
-  const importNote = el('p', { class: 'placeholder import-note', text: '' })
-  function reportImport({ added, skipped }) {
+  // 結果は操作したボタンのすぐ下に出す（離れた場所だと画面外になって気づけない）
+  const pasteNote = el('p', { class: 'import-note', text: '' })
+  const fileNote = el('p', { class: 'import-note', text: '' })
+
+  function reportImport({ added, skipped }, target) {
     const skip = skipped > 0 ? `（重複など ${skipped}問は取り込まず）` : ''
-    importNote.textContent = added > 0 ? `${added}問を取り込みました${skip}` : `取り込める問題がありませんでした${skip}`
+    target.textContent = added > 0 ? `${added}問を追加しました${skip}` : `追加できる問題がありませんでした${skip}`
+    target.className = added > 0 ? 'import-note ok' : 'import-note ng'
+    for (const other of [pasteNote, fileNote]) {
+      if (other !== target) other.textContent = ''
+    }
     saveBank(items)
     render()
   }
 
-  const bankImportBtn = el('button', { class: 'btn btn-small', text: '取り込み', onclick: () => {
+  const bankImportBtn = el('button', { class: 'btn btn-small btn-primary', text: '貼り付けから追加', onclick: () => {
     const result = importTsv(items, bankPaste.value)
     if (result.added > 0) bankPaste.value = ''
-    reportImport(result)
+    reportImport(result, pasteNote)
   } })
 
   // お試し用のサンプル問題（同じ問題は重複して入らない）
-  const sampleBtn = el('button', { class: 'btn btn-small', text: 'サンプルを取り込む', onclick: () => {
+  const sampleBtn = el('button', { class: 'btn btn-small', text: 'サンプルを入れる', onclick: () => {
     let added = 0
     let skipped = 0
     for (const sample of SAMPLE_QUESTIONS) {
       if (addQuestion(items, sample) !== null) added += 1
       else skipped += 1
     }
-    reportImport({ added, skipped })
+    reportImport({ added, skipped }, pasteNote)
   } })
 
-  const exportNote = el('p', { class: 'placeholder', text: '' })
-  const exportBtn = el('button', { class: 'btn btn-small', text: 'ファイルへエクスポート', onclick: () => {
+  const exportNote = el('p', { class: 'io-note export-note', text: '' })
+  const exportBtn = el('button', { class: 'btn btn-small', text: 'ファイルに書き出す', onclick: () => {
     const blob = new Blob([exportPayload(items)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const link = el('a', { href: url, download: `hayabuzz-questions-${new Date().toISOString().slice(0, 10)}.json` })
@@ -218,15 +221,16 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     reader.onload = () => {
       const questions = parseImport(String(reader.result))
       if (questions === null) {
-        importNote.textContent = '読み込めませんでした（エクスポートしたファイルを指定してください）'
+        fileNote.textContent = '読み込めませんでした（書き出したファイルを選んでください）'
+        fileNote.className = 'import-note ng'
         return
       }
-      reportImport(applyImport(items, questions, { replace: replaceCheck.checked }))
+      reportImport(applyImport(items, questions, { replace: replaceCheck.checked }), fileNote)
     }
     reader.readAsText(file)
   })
   const importLabel = el('label', { class: 'btn btn-small' }, [
-    el('span', { text: 'ファイルから復元' }),
+    el('span', { text: 'ファイルを読み込む' }),
     importFileInput,
   ])
 
@@ -251,7 +255,11 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
             ...(onAsk !== null
               ? [el('button', { class: 'btn btn-mini', text: '選ぶ', disabled: !askable, onclick: () => onAsk(item) })]
               : []),
-            el('button', { class: 'btn btn-mini', text: '編集', onclick: () => startEdit(item) }),
+            // フォームを開く操作なので、外タップ扱いで閉じられないよう伝播を止める
+            el('button', { class: 'btn btn-mini', text: '編集', onclick: (ev) => {
+              ev.stopPropagation()
+              startEdit(item)
+            } }),
             el('button', { class: 'btn btn-mini btn-ng', text: '削除', onclick: () => {
               removeQuestion(items, item.id)
               saveBank(items)
@@ -264,9 +272,8 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     )
     const exportedAt = getExportedAt()
     exportNote.textContent =
-      exportedAt !== null
-        ? `最終エクスポート: ${new Date(exportedAt).toLocaleString()}（ブラウザ保存は消えることがあるため、定期的なエクスポートを推奨）`
-        : 'ブラウザ保存は消えることがあります。作ったらエクスポートしてファイルを正本にしてください'
+      exportedAt !== null ? `前回の書き出し: ${new Date(exportedAt).toLocaleString()}` : 'まだ書き出していません'
+    exportNote.className = exportedAt !== null ? 'io-note export-note' : 'io-note export-note warn'
   }
 
   // 追加・編集フォームは一覧とは別のカードにして下部に貼り付ける。
@@ -294,25 +301,48 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     formToggle.setAttribute('aria-expanded', String(open))
   }
   formToggle.addEventListener('click', () => setFormOpen(!formCard.classList.contains('open')))
+  // 開いたままだと一覧や取り込みの操作を覆ってしまうため、フォームの外をタップしたら閉じる。
+  // フォーム内のクリックはここで止める（要素が作り直されても誤判定しないように）
+  formCard.addEventListener('click', (ev) => ev.stopPropagation())
+  document.addEventListener('click', () => setFormOpen(false))
 
+  // 「まとめて入れる」と「ファイルで持ち運ぶ」は目的が違うので節を分ける。
+  // 一覧より前に置く（後ろだと、取り込んで一覧が伸びたときに操作中の位置が画面外へ飛ぶ）
   const listCard = el('div', { class: 'card rules-card bank-card' }, [
     el('h2', { text: '問題集' }),
     bankNote,
     ...(onAsk !== null ? [bankHint] : []),
+    el('details', { class: 'rules-advanced bank-io' }, [
+      el('summary', { text: 'まとめて入れる・持ち出す' }),
+      el('section', { class: 'io-section' }, [
+        el('h3', { class: 'io-title', text: '貼り付けて追加' }),
+        el('p', { class: 'io-note', text: '1行1問・タブ区切り（表計算やAIの出力をそのままコピペできます）' }),
+        el('ul', { class: 'io-formats' }, [
+          el('li', {}, [el('span', { class: 'type-badge', text: '早押し' }), el('span', { text: '問題 / 答え / メモ' })]),
+          el('li', {}, [el('span', { class: 'type-badge type-ox', text: '○×' }), el('span', { text: '問題 / ○ か × / メモ' })]),
+          el('li', {}, [
+            el('span', { class: 'type-badge type-choice4', text: '4択' }),
+            el('span', { text: '問題 / 選択肢1〜4 / 正解番号 / メモ' }),
+          ]),
+        ]),
+        bankPaste,
+        el('div', { class: 'btn-row' }, [bankImportBtn, sampleBtn]),
+        pasteNote,
+      ]),
+      el('section', { class: 'io-section' }, [
+        el('h3', { class: 'io-title', text: 'ファイルで保存・持ち運び' }),
+        el('p', { class: 'io-note', text: 'ブラウザの保存は消えることがあります。書き出したファイルを正本にしてください' }),
+        exportNote,
+        el('div', { class: 'btn-row' }, [exportBtn, importLabel]),
+        el('label', { class: 'settings-row io-replace' }, [
+          el('span', { text: '読み込む前に、いまの問題集を空にする' }),
+          replaceCheck,
+        ]),
+        fileNote,
+      ]),
+    ]),
     bankPlaceholder,
     bankRows,
-    el('details', { class: 'rules-advanced' }, [
-      el('summary', { text: '取り込み・書き出し' }),
-      bankPaste,
-      el('div', { class: 'btn-row' }, [bankImportBtn, sampleBtn]),
-      el('label', { class: 'settings-row' }, [
-        el('span', { text: 'ファイルから復元するとき、今の問題集を空にして入れ替える' }),
-        replaceCheck,
-      ]),
-      el('div', { class: 'btn-row' }, [exportBtn, importLabel]),
-      importNote,
-      exportNote,
-    ]),
   ])
   const root = el('div', { class: 'bank-panel' }, [listCard, formCard])
 

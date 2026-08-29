@@ -313,8 +313,8 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     el('div', { class: 'card rules-card bank-io' }, [
       el('h2', { text: 'まとめて入れる・持ち出す' }),
       el('section', { class: 'io-section' }, [
-        el('h3', { class: 'io-title', text: '貼り付けて追加' }),
-        el('p', { class: 'io-note', text: '1行1問・タブ区切り（表計算やAIの出力をそのままコピペできます）' }),
+        el('h3', { class: 'io-title', text: 'AI・表計算から取り込む' }),
+        el('p', { class: 'io-note', text: 'AIに作らせた問題や表計算の表を、そのまま貼り付けて追加できます（1行1問・タブ区切り）' }),
         el('ul', { class: 'io-formats' }, [
           el('li', {}, [el('span', { class: 'type-badge', text: '早押し' }), el('span', { text: '問題 / 答え / メモ' })]),
           el('li', {}, [el('span', { class: 'type-badge type-ox', text: '○×' }), el('span', { text: '問題 / ○ か × / メモ' })]),
@@ -328,8 +328,8 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
         pasteNote,
       ]),
       el('section', { class: 'io-section' }, [
-        el('h3', { class: 'io-title', text: 'ファイルで保存・持ち運び' }),
-        el('p', { class: 'io-note', text: 'ブラウザの保存は消えることがあります。書き出したファイルを正本にしてください' }),
+        el('h3', { class: 'io-title', text: 'バックアップ・引っ越し' }),
+        el('p', { class: 'io-note', text: '問題集をまるごとファイルに保存します。ブラウザの保存は消えることがあるので、このファイルを正本にしてください' }),
         exportNote,
         el('div', { class: 'btn-row' }, [exportBtn, importLabel]),
         el('label', { class: 'settings-row io-replace' }, [

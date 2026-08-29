@@ -125,6 +125,8 @@ button {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 14px;
+  /* label をボタンとして使う場合、button と違って中央揃えが継承で崩れるため明示する */
+  text-align: center;
 }
 
 .btn.hidden {

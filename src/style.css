@@ -1677,8 +1677,33 @@ textarea.input {
 }
 
 .io-formats .type-badge {
+  flex: none;
   min-width: 3.4em;
   text-align: center;
+}
+
+/* 列の並び。狭い画面では末尾を省略してボタンの場所を確保する */
+.io-columns {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.io-formats .btn-mini {
+  flex: none;
+  padding: 3px 8px;
+  font-size: 0.68rem;
+}
+
+/* 貼り付け欄はタブ区切りの例を見せるので等幅で */
+.bank-paste {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  tab-size: 6;
+  white-space: pre;
+  overflow-x: auto;
 }
 
 .export-note.warn {

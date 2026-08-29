@@ -162,15 +162,64 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   const bankNote = el('p', { class: 'placeholder', text: '出題中は選べません（判定を終えるか、取り消してください）' })
   const bankHint = el('p', { class: 'placeholder', text: '「選ぶ」を押すと出題欄に読み込みます（出題は「全員に出題」で）' })
 
+  // プレースホルダは実際のタブ区切りで書いておく（説明より見た方が早い）
   const bankPaste = el('textarea', {
     class: 'input bank-paste',
     rows: '3',
-    placeholder: 'ここに貼り付け',
+    placeholder: '日本の首都は？\t東京\n富士山の高さは？\t3776m\tm単位で',
   })
   // 取り込み結果の案内（追加数と、重複などで飛ばした数）
   // 結果は操作したボタンのすぐ下に出す（離れた場所だと画面外になって気づけない）
   const pasteNote = el('p', { class: 'import-note', text: '' })
   const fileNote = el('p', { class: 'import-note', text: '' })
+
+  // 形式ごとの列の並びと、そのまま AI に渡せる依頼文。
+  // 並びを説明するより、依頼文をコピーしてもらう方が早い
+  const PROMPT_EXAMPLES = [
+    {
+      type: 'buzzer',
+      columns: '問題 / 答え / メモ',
+      prompt:
+        'クイズを20問作ってください。1行1問、タブ区切りで「問題→答え→補足メモ」の順に出力してください。' +
+        '前置き・番号・見出しは不要です。',
+    },
+    {
+      type: 'ox',
+      columns: '問題 / ○ か × / メモ',
+      prompt:
+        '○×クイズを20問作ってください。1行1問、タブ区切りで「問題→正解（○か×）→補足メモ」の順に出力してください。' +
+        '前置き・番号・見出しは不要です。',
+    },
+    {
+      type: 'choice4',
+      columns: '問題 / 選択肢1〜4 / 正解番号 / メモ',
+      prompt:
+        '4択クイズを20問作ってください。1行1問、タブ区切りで' +
+        '「問題→選択肢1→選択肢2→選択肢3→選択肢4→正解番号（1〜4）→補足メモ」の順に出力してください。' +
+        '前置き・番号・見出しは不要です。',
+    },
+  ]
+
+  const promptRows = PROMPT_EXAMPLES.map(({ type, columns, prompt }) => {
+    const copyBtn = el('button', { class: 'btn btn-mini', text: 'AI依頼文', onclick: async () => {
+      try {
+        await navigator.clipboard.writeText(prompt)
+        copyBtn.textContent = 'コピー済'
+      } catch {
+        // クリップボードが使えない環境では、貼り付け欄に出して手動コピーしてもらう
+        bankPaste.value = prompt
+        copyBtn.textContent = '下に出しました'
+      }
+      setTimeout(() => {
+        copyBtn.textContent = 'AI依頼文'
+      }, 1600)
+    } })
+    return el('li', {}, [
+      el('span', { class: `type-badge type-${type}`, text: TYPE_LABEL[type] }),
+      el('span', { class: 'io-columns', text: columns }),
+      copyBtn,
+    ])
+  })
 
   function reportImport({ added, skipped }, target) {
     const skip = skipped > 0 ? `（重複など ${skipped}問は取り込まず）` : ''
@@ -313,16 +362,8 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     el('div', { class: 'card rules-card bank-io' }, [
       el('h2', { text: 'まとめて入れる・持ち出す' }),
       el('section', { class: 'io-section' }, [
-        el('h3', { class: 'io-title', text: 'AI・表計算から取り込む' }),
-        el('p', { class: 'io-note', text: 'AIに作らせた問題や表計算の表を、そのまま貼り付けて追加できます（1行1問・タブ区切り）' }),
-        el('ul', { class: 'io-formats' }, [
-          el('li', {}, [el('span', { class: 'type-badge', text: '早押し' }), el('span', { text: '問題 / 答え / メモ' })]),
-          el('li', {}, [el('span', { class: 'type-badge type-ox', text: '○×' }), el('span', { text: '問題 / ○ か × / メモ' })]),
-          el('li', {}, [
-            el('span', { class: 'type-badge type-choice4', text: '4択' }),
-            el('span', { text: '問題 / 選択肢1〜4 / 正解番号 / メモ' }),
-          ]),
-        ]),
+        el('h3', { class: 'io-title', text: '貼り付けて取り込む' }),
+        el('ul', { class: 'io-formats' }, promptRows),
         bankPaste,
         el('div', { class: 'btn-row' }, [bankImportBtn, sampleBtn]),
         pasteNote,

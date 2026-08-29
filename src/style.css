@@ -1516,14 +1516,32 @@ textarea.input {
   overflow: visible;
 }
 
-/* スクロールしても見出しが残るようにする（×ボタンと同じ高さに並ぶ） */
-.bank-card > h2 {
+/* 見出し行（見出し + 取り込み・書き出しの入口）。スクロールしても残す */
+.bank-head-row {
   position: sticky;
   top: -12px;
   z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   margin: -12px -12px 0;
   padding: 12px 12px 8px;
   background: var(--card);
+}
+
+/* 見出しは中央、入口は右端に置く（×ボタンと重ならないよう余白を確保） */
+.bank-head-row > h2 {
+  flex: 1;
+  text-align: left;
+}
+
+.bank-head-row .link-btn {
+  padding-right: 34px;
+}
+
+/* 取り込み・書き出しは問題集の上に重ねる */
+.io-overlay {
+  z-index: 11;
 }
 
 /* 追加・編集フォーム: 一覧の上に浮かせて、下端に貼り付ける */

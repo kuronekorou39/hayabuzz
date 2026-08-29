@@ -14,7 +14,7 @@ import {
   updateQuestion,
 } from '../game/question-bank.js'
 import { SAMPLE_QUESTIONS } from '../game/sample-questions.js'
-import { el } from '../util/dom.js'
+import { backdropDismiss, el, popupOverlay } from '../util/dom.js'
 
 // 問題集の UI。出題者のポップアップ（出題つき）と、編集専用ページ（出題なし）で共用する。
 
@@ -307,13 +307,11 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   document.addEventListener('click', () => setFormOpen(false))
 
   // 「まとめて入れる」と「ファイルで持ち運ぶ」は目的が違うので節を分ける。
-  // 一覧より前に置く（後ろだと、取り込んで一覧が伸びたときに操作中の位置が画面外へ飛ぶ）
-  const listCard = el('div', { class: 'card rules-card bank-card' }, [
-    el('h2', { text: '問題集' }),
-    bankNote,
-    ...(onAsk !== null ? [bankHint] : []),
-    el('details', { class: 'rules-advanced bank-io' }, [
-      el('summary', { text: 'まとめて入れる・持ち出す' }),
+  // 一覧の枠に混ぜず、独立したポップアップとして重ねて表示する
+  const ioOverlay = popupOverlay(
+    'io-overlay',
+    el('div', { class: 'card rules-card bank-io' }, [
+      el('h2', { text: 'まとめて入れる・持ち出す' }),
       el('section', { class: 'io-section' }, [
         el('h3', { class: 'io-title', text: '貼り付けて追加' }),
         el('p', { class: 'io-note', text: '1行1問・タブ区切り（表計算やAIの出力をそのままコピペできます）' }),
@@ -341,11 +339,25 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
         fileNote,
       ]),
     ]),
+  )
+  backdropDismiss(ioOverlay)
+  const ioBtn = el('button', {
+    class: 'link-btn',
+    text: 'まとめて入れる・持ち出す',
+    onclick: () => ioOverlay.classList.remove('hidden'),
+  })
+
+  const listCard = el('div', { class: 'card rules-card bank-card' }, [
+    // 見出しの右端に入口を置く（一覧の中に節を挟まない）
+    el('div', { class: 'bank-head-row' }, [el('h2', { text: '問題集' }), ioBtn]),
+    bankNote,
+    ...(onAsk !== null ? [bankHint] : []),
     bankPlaceholder,
     bankRows,
   ])
   const root = el('div', { class: 'bank-panel' }, [listCard, formCard])
 
   render()
-  return { root, render }
+  // ioOverlay は呼び出し側で画面に配置する（問題集の上に重ねるため）
+  return { root, ioOverlay, render }
 }

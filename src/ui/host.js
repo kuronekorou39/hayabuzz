@@ -636,6 +636,7 @@ export function mountHost(app) {
       hostDiagOverlay,
       hostSettingsOverlay,
       historyOverlay,
+      bankPanel.ioOverlay, // 問題集の上に重ねて出す
     )
   }
 

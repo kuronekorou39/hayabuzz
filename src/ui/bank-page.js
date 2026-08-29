@@ -19,5 +19,6 @@ export function mountBankPage(app, { onBack }) {
       el('p', { class: 'placeholder', text: 'ここで作った問題は、出題者画面の「問題集」からそのまま出題できます' }),
       panel.root,
     ]),
+    panel.ioOverlay,
   )
 }

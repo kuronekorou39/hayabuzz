@@ -32,27 +32,39 @@ describe('問題の追加と重複', () => {
 })
 
 describe('貼り付け取り込み（TSV）', () => {
-  test('列の並びで早押し・○×・4択を判別する', () => {
+  test('指定した形式の列の並びで取り込む', () => {
+    const buzzer = []
+    expect(importTsv(buzzer, '富士山の標高は？\t3776m\tメートル単位で', 'buzzer')).toEqual({ added: 1, skipped: 0 })
+    expect(buzzer[0]).toMatchObject({ type: 'buzzer', a: '3776m', memo: 'メートル単位で' })
+
+    const ox = []
+    importTsv(ox, 'トマトは果物である\t○\t植物学上は', 'ox')
+    expect(ox[0]).toMatchObject({ type: 'ox', a: 'o', memo: '植物学上は' })
+
+    const choice4 = []
+    importTsv(choice4, '日本の都道府県はいくつ？\t43\t45\t47\t49\t3\t四択メモ', 'choice4')
+    expect(choice4[0]).toMatchObject({ type: 'choice4', a: '3', choices: ['43', '45', '47', '49'], memo: '四択メモ' })
+  })
+
+  test('答えが「○」の早押し問題を、○×として取り込まない', () => {
     const items = []
-    const result = importTsv(
-      items,
-      [
-        '富士山の標高は？\t3776m\tメートル単位で',
-        'トマトは果物である\t○',
-        '日本の都道府県はいくつ？\t43\t45\t47\t49\t3\t四択メモ',
-      ].join('\n'),
-    )
-    expect(result).toEqual({ added: 3, skipped: 0 })
-    expect(items[0]).toMatchObject({ type: 'buzzer', a: '3776m', memo: 'メートル単位で' })
-    expect(items[1]).toMatchObject({ type: 'ox', a: 'o' })
-    expect(items[2]).toMatchObject({ type: 'choice4', a: '3', choices: ['43', '45', '47', '49'], memo: '四択メモ' })
+    importTsv(items, 'この記号はどっち？\t○\t早押しのつもり', 'buzzer')
+    expect(items[0]).toMatchObject({ type: 'buzzer', a: '○' })
+  })
+
+  test('正解が読み取れない行は「正解は未定」として取り込む', () => {
+    const items = []
+    importTsv(items, '正解が空の○×問題\t\tメモ', 'ox')
+    importTsv(items, '番号のない4択\tあ\tい\tう\tえ', 'choice4')
+    expect(items[0]).toMatchObject({ type: 'ox', a: '' })
+    expect(items[1]).toMatchObject({ type: 'choice4', a: '', choices: ['あ', 'い', 'う', 'え'] })
   })
 
   test('同じ内容を2度取り込んでも増えない', () => {
     const items = []
     const text = '問題A\t答えA\n問題B\t答えB'
-    expect(importTsv(items, text)).toEqual({ added: 2, skipped: 0 })
-    expect(importTsv(items, text)).toEqual({ added: 0, skipped: 2 })
+    expect(importTsv(items, text, 'buzzer')).toEqual({ added: 2, skipped: 0 })
+    expect(importTsv(items, text, 'buzzer')).toEqual({ added: 0, skipped: 2 })
     expect(items).toHaveLength(2)
   })
 })

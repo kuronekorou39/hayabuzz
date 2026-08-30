@@ -1656,45 +1656,27 @@ textarea.input {
   color: var(--dim);
 }
 
-/* 貼り付けの書式一覧（形式バッジ + 列の並び） */
-.io-formats {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+/* 選んだ形式の列の並び */
+.io-columns-line {
   margin: 0;
-  padding: 8px 10px;
-  list-style: none;
+  padding: 6px 10px;
   background: var(--bg);
   border-radius: 8px;
-  font-size: 0.73rem;
+  font-size: 0.74rem;
   color: var(--dim);
+  overflow-wrap: anywhere;
 }
 
-.io-formats li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* お試し用のサンプルは普段使わないので、末尾に控えめに置く */
+.io-sample {
+  align-items: flex-start;
+  padding-bottom: 0;
 }
 
-.io-formats .type-badge {
-  flex: none;
-  min-width: 3.4em;
-  text-align: center;
-}
-
-/* 列の並び。狭い画面では末尾を省略してボタンの場所を確保する */
-.io-columns {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.io-formats .btn-mini {
-  flex: none;
-  padding: 3px 8px;
-  font-size: 0.68rem;
+.io-sample .btn {
+  font-size: 0.74rem;
+  padding: 6px 12px;
+  color: var(--dim);
 }
 
 /* 貼り付け欄はタブ区切りの例を見せるので等幅で */

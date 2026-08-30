@@ -162,64 +162,66 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   const bankNote = el('p', { class: 'placeholder', text: '出題中は選べません（判定を終えるか、取り消してください）' })
   const bankHint = el('p', { class: 'placeholder', text: '「選ぶ」を押すと出題欄に読み込みます（出題は「全員に出題」で）' })
 
-  // プレースホルダは実際のタブ区切りで書いておく（説明より見た方が早い）
-  const bankPaste = el('textarea', {
-    class: 'input bank-paste',
-    rows: '3',
-    placeholder: '日本の首都は？\t東京\n富士山の高さは？\t3776m\tm単位で',
-  })
+  // プレースホルダは実際のタブ区切りの記入例（説明より見た方が早い）。中身は形式で切り替える
+  const bankPaste = el('textarea', { class: 'input bank-paste', rows: '3' })
   // 取り込み結果の案内（追加数と、重複などで飛ばした数）
   // 結果は操作したボタンのすぐ下に出す（離れた場所だと画面外になって気づけない）
   const pasteNote = el('p', { class: 'import-note', text: '' })
   const fileNote = el('p', { class: 'import-note', text: '' })
 
-  // 形式ごとの列の並びと、そのまま AI に渡せる依頼文。
-  // 並びを説明するより、依頼文をコピーしてもらう方が早い
-  const PROMPT_EXAMPLES = [
-    {
-      type: 'buzzer',
+  // 形式ごとの列の並び・記入例・AI への依頼文。
+  // 形式は貼り付ける人が選ぶ（中身から推測すると、答えが「○」の早押し問題を
+  // ○×として取り込んでしまうなどの誤判定が避けられない）
+  const PASTE_FORMATS = {
+    buzzer: {
       columns: '問題 → 答え → メモ',
+      sample: '日本の首都は？\t東京\n富士山の高さは？\t3776m\tm単位で',
       prompt:
         'クイズを20問作ってください。1行1問、タブ区切りで「問題→答え→補足メモ」の順に出力してください。' +
         '前置き・番号・見出しは不要です。',
     },
-    {
-      type: 'ox',
+    ox: {
       columns: '問題 → ○ か × → メモ',
+      sample: 'カンガルーは後ろ向きに歩けない\t○\n万里の長城は宇宙から見える\t×\t有名な俗説',
       prompt:
         '○×クイズを20問作ってください。1行1問、タブ区切りで「問題→正解（○か×）→補足メモ」の順に出力してください。' +
         '前置き・番号・見出しは不要です。',
     },
-    {
-      type: 'choice4',
+    choice4: {
       columns: '問題 → 選択肢1〜4 → 正解番号 → メモ',
+      sample: '日本の都道府県は？\t43\t45\t47\t49\t3\n五大陸で最大は？\tアフリカ\tユーラシア\t北米\t南米\t2',
       prompt:
         '4択クイズを20問作ってください。1行1問、タブ区切りで' +
         '「問題→選択肢1→選択肢2→選択肢3→選択肢4→正解番号（1〜4）→補足メモ」の順に出力してください。' +
         '前置き・番号・見出しは不要です。',
     },
-  ]
+  }
 
-  const promptRows = PROMPT_EXAMPLES.map(({ type, columns, prompt }) => {
-    const copyBtn = el('button', { class: 'btn btn-mini', text: 'AI依頼文', onclick: async () => {
-      try {
-        await navigator.clipboard.writeText(prompt)
-        copyBtn.textContent = 'コピー済'
-      } catch {
-        // クリップボードが使えない環境では、貼り付け欄に出して手動コピーしてもらう
-        bankPaste.value = prompt
-        copyBtn.textContent = '下に出しました'
-      }
-      setTimeout(() => {
-        copyBtn.textContent = 'AI依頼文'
-      }, 1600)
-    } })
-    return el('li', {}, [
-      el('span', { class: `type-badge type-${type}`, text: TYPE_LABEL[type] }),
-      el('span', { class: 'io-columns', text: columns }),
-      copyBtn,
-    ])
-  })
+  const pasteTypeSelect = el('select', { class: 'input paste-type-select' },
+    QUESTION_TYPES.map((t) => el('option', { value: t, text: TYPE_LABEL[t] })))
+  const pasteColumns = el('p', { class: 'io-columns-line', text: '' })
+  const promptBtn = el('button', { class: 'btn btn-small', text: 'AI依頼文をコピー', onclick: async () => {
+    const { prompt } = PASTE_FORMATS[pasteTypeSelect.value]
+    try {
+      await navigator.clipboard.writeText(prompt)
+      promptBtn.textContent = 'コピーしました'
+    } catch {
+      // クリップボードが使えない環境では、貼り付け欄に出して手動コピーしてもらう
+      bankPaste.value = prompt
+      promptBtn.textContent = '下に出しました'
+    }
+    setTimeout(() => {
+      promptBtn.textContent = 'AI依頼文をコピー'
+    }, 1600)
+  } })
+
+  // 選んだ形式に合わせて、列の並びと記入例を切り替える
+  function syncPasteFormat() {
+    const format = PASTE_FORMATS[pasteTypeSelect.value]
+    pasteColumns.textContent = format.columns
+    bankPaste.placeholder = format.sample
+  }
+  pasteTypeSelect.addEventListener('change', syncPasteFormat)
 
   function reportImport({ added, skipped }, target) {
     const skip = skipped > 0 ? `（重複など ${skipped}問は取り込まず）` : ''
@@ -233,7 +235,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   }
 
   const bankImportBtn = el('button', { class: 'btn btn-small btn-primary', text: '貼り付けから追加', onclick: () => {
-    const result = importTsv(items, bankPaste.value)
+    const result = importTsv(items, bankPaste.value, pasteTypeSelect.value)
     if (result.added > 0) bankPaste.value = ''
     reportImport(result, pasteNote)
   } })
@@ -325,9 +327,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
       }),
     )
     const exportedAt = getExportedAt()
-    exportNote.textContent =
-      exportedAt !== null ? `前回の書き出し: ${new Date(exportedAt).toLocaleString()}` : 'まだ書き出していません'
-    exportNote.className = exportedAt !== null ? 'io-note export-note' : 'io-note export-note warn'
+    exportNote.textContent = exportedAt !== null ? `前回の書き出し: ${new Date(exportedAt).toLocaleString()}` : ''
   }
 
   // 追加・編集フォームは一覧とは別のカードにして下部に貼り付ける。
@@ -368,9 +368,10 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
       el('h2', { text: 'まとめて入れる・持ち出す' }),
       el('section', { class: 'io-section' }, [
         el('h3', { class: 'io-title', text: '貼り付けて取り込む（1行1問・タブ区切り）' }),
-        el('ul', { class: 'io-formats' }, promptRows),
+        el('div', { class: 'settings-row' }, [el('span', { text: '形式' }), pasteTypeSelect]),
+        pasteColumns,
         bankPaste,
-        el('div', { class: 'btn-row' }, [bankImportBtn, sampleBtn]),
+        el('div', { class: 'btn-row' }, [bankImportBtn, promptBtn]),
         pasteNote,
       ]),
       el('section', { class: 'io-section' }, [
@@ -383,6 +384,8 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
         ]),
         fileNote,
       ]),
+      // お試し用。普段の操作では使わないので末尾に置く
+      el('section', { class: 'io-section io-sample' }, [sampleBtn]),
     ]),
   )
   backdropDismiss(ioOverlay)
@@ -402,6 +405,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   ])
   const root = el('div', { class: 'bank-panel' }, [listCard, formCard])
 
+  syncPasteFormat()
   render()
   // ioOverlay は呼び出し側で画面に配置する（問題集の上に重ねるため）
   return { root, ioOverlay, render }

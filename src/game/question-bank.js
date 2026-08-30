@@ -84,12 +84,14 @@ export function addQuestion(items, { type = 'buzzer', q, a = '', choices = [], m
   return item
 }
 
-// 貼り付け取り込み（1行1問・タブ区切り）。形式は列の並びで判別する:
+// 貼り付け取り込み（1行1問・タブ区切り）。列の並びは形式ごとに決まっている:
 //   早押し: 問題 / 答え / メモ
 //   ○×  : 問題 / ○ か × / メモ
 //   4択  : 問題 / 選択肢1 / 選択肢2 / 選択肢3 / 選択肢4 / 正解番号 / メモ
+// 形式は呼び出し側が指定する（中身から推測すると、答えが「○」の早押し問題を
+// ○×として取り込んでしまうなどの誤判定が避けられないため）。
 // 戻り値は { added: 追加できた数, skipped: 重複などで飛ばした数 }
-export function importTsv(items, text) {
+export function importTsv(items, text, type = 'buzzer') {
   let added = 0
   let skipped = 0
   for (const line of text.split('\n')) {
@@ -97,11 +99,19 @@ export function importTsv(items, text) {
     const q = cells[0] ?? ''
     if (q === '') continue
     let spec
-    if (cells.length >= 6 && /^[1-4]$/.test(cells[5])) {
-      spec = { type: 'choice4', q, choices: cells.slice(1, 5), a: cells[5], memo: cells[6] ?? '' }
-    } else if (['○', 'o', 'O', '×', 'x', 'X'].includes(cells[1] ?? '')) {
-      const isCircle = ['○', 'o', 'O'].includes(cells[1])
-      spec = { type: 'ox', q, a: isCircle ? 'o' : 'x', memo: cells[2] ?? '' }
+    if (type === 'choice4') {
+      const correct = cells[5] ?? ''
+      spec = {
+        type,
+        q,
+        choices: cells.slice(1, 5),
+        a: /^[1-4]$/.test(correct) ? correct : '', // 正解番号が無ければ「未定」として取り込む
+        memo: cells[6] ?? '',
+      }
+    } else if (type === 'ox') {
+      const value = cells[1] ?? ''
+      const answer = ['○', '〇', 'o', 'O'].includes(value) ? 'o' : ['×', 'x', 'X'].includes(value) ? 'x' : ''
+      spec = { type, q, a: answer, memo: cells[2] ?? '' }
     } else {
       spec = { type: 'buzzer', q, a: cells[1] ?? '', memo: cells[2] ?? '' }
     }

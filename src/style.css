@@ -1,14 +1,28 @@
 :root {
   --bg: #10141a;
-  --card: #1a212b;
-  --card-2: #222b37;
+  --card: #1b222d;
+  --card-2: #262f3c;
+  /* 沈んだ面（入力欄など）。枠線ではなく暗さで「へこみ」を作る */
+  --sunken: #141a23;
   --border: #2e3947;
   --fg: #e8eaed;
   --dim: #94a0af;
-  --primary: #4d8dff;
+
+  /* アクセントは金。背景写真は8枚とも青〜藍（色相196〜245°）なので、
+     同系色の青だと沈んで「ブラウザ既定の色」に見えてしまう。
+     写真の中の暖色のボケ（色相25〜31°）と響き合う色を選ぶ */
+  --primary-rgb: 238, 178, 60;
+  --primary: rgb(var(--primary-rgb));
+  --primary-text: #f3cb7c; /* 金地ではなく暗い面に載せる文字用（細い字でも読める明度） */
+  --on-primary: #17120a; /* 金の上に載せる文字 */
+
   --ok: #35c77b;
   --ng: #ff6b6b;
-  --warn: #ffb020;
+  --warn: #ff8a3d; /* 金と役割が混ざらないよう橙に寄せる */
+
+  /* 面の浮き。枠線の代わりに、内側の光の縁と落ち影で区切る */
+  --lift: inset 0 1px 0 rgba(255, 255, 255, 0.055), 0 8px 24px rgba(0, 0, 0, 0.3);
+  --hairline: rgba(255, 255, 255, 0.07);
 }
 
 * {
@@ -127,12 +141,12 @@ body {
 
 .card {
   background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  box-shadow: var(--lift);
 }
 
 .card h2 {
@@ -154,8 +168,8 @@ button {
 .btn {
   background: var(--card-2);
   color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid transparent; /* 枠は状態表示のためだけに使う（通常は見せない） */
+  border-radius: 12px;
   padding: 10px 14px;
   /* label をボタンとして使う場合、button と違って中央揃えが継承で崩れるため明示する */
   text-align: center;
@@ -172,13 +186,14 @@ button {
   gap: 10px;
   width: 100%;
   background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 12px;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 12px;
   color: var(--fg);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  box-shadow: var(--lift);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -187,8 +202,8 @@ button {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: #9db8ff;
-  background: rgba(90, 140, 255, 0.16);
+  color: var(--primary-text);
+  background: rgba(var(--primary-rgb), 0.14);
   border-radius: 6px;
   padding: 2px 8px;
 }
@@ -277,14 +292,14 @@ button {
 }
 
 .step.active {
-  background: rgba(90, 140, 255, 0.2);
+  background: rgba(var(--primary-rgb), 0.18);
   color: var(--fg);
   font-weight: 700;
 }
 
 .step.active .step-num {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .step-hint {
@@ -303,10 +318,10 @@ button {
 @keyframes next-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(90, 140, 255, 0.45);
+    box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0.5);
   }
   50% {
-    box-shadow: 0 0 0 7px rgba(90, 140, 255, 0);
+    box-shadow: 0 0 0 7px rgba(var(--primary-rgb), 0);
   }
 }
 
@@ -348,27 +363,24 @@ button {
 
 .btn-primary {
   background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   font-weight: 700;
 }
 
 .btn-ok {
   background: var(--ok);
-  border-color: var(--ok);
   color: #08130d;
   font-weight: 700;
 }
 
+/* 打ち消し系は枠線ではなく、薄く色を敷いて示す（線を増やさない） */
 .btn-ng {
-  background: transparent;
-  border-color: var(--ng);
+  background: rgba(255, 107, 107, 0.13);
   color: var(--ng);
 }
 
 .btn-arm {
   background: #d92b2b;
-  border-color: #d92b2b;
   color: #fff;
   font-weight: 700;
 }
@@ -418,19 +430,21 @@ button {
   flex: 1;
 }
 
+/* 入力欄は枠で囲わず、まわりより暗く沈ませて「入れる場所」を示す */
 .input {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  background: var(--sunken);
+  border: none;
+  border-radius: 12px;
   color: var(--fg);
   padding: 12px;
   font: inherit;
   width: 100%;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.32);
 }
 
 .input:focus {
   outline: 2px solid var(--primary);
-  outline-offset: -1px;
+  outline-offset: 0;
 }
 
 textarea.input {
@@ -499,7 +513,6 @@ textarea.input {
 .phase-chip {
   display: inline-block;
   background: var(--card-2);
-  border: 1px solid var(--border);
   border-radius: 999px;
   padding: 4px 12px;
   font-size: 0.85rem;
@@ -538,8 +551,8 @@ textarea.input {
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.06em;
-  color: #9db8ff;
-  background: rgba(90, 140, 255, 0.16);
+  color: var(--primary-text);
+  background: rgba(var(--primary-rgb), 0.14);
   border-radius: 6px;
   padding: 1px 8px;
 }
@@ -590,14 +603,13 @@ textarea.input {
   font-size: 0.72rem;
   border-radius: 999px;
   padding: 2px 8px;
-  border: 1px solid var(--border);
+  background: var(--card-2);
   color: var(--dim);
 }
 
 .badge.active {
   background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .badge.ng {
@@ -885,7 +897,7 @@ textarea.input {
   font-size: 0.6rem;
   font-weight: 800;
   letter-spacing: 0.08em;
-  color: #fff;
+  color: var(--on-primary);
   background: var(--primary);
   border-radius: 5px;
   padding: 1px 6px;
@@ -918,8 +930,8 @@ textarea.input {
   gap: 4px;
   padding: 8px 2px 6px;
   background: var(--card-2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid transparent;
+  border-radius: 12px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -1006,10 +1018,8 @@ textarea.input {
   flex-direction: column;
   max-height: 78vh;
   background: var(--card);
-  border: 1px solid var(--border);
-  border-bottom: none;
-  border-radius: 16px 16px 0 0;
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
+  border-radius: 18px 18px 0 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 -8px 28px rgba(0, 0, 0, 0.5);
   /* 閉じている間は取っ手だけを残して画面外へ下げる */
   transform: translateY(calc(100% - var(--sheet-handle-h)));
   transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
@@ -1103,7 +1113,7 @@ textarea.input {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--hairline);
   padding: 10px 2px 0;
 }
 
@@ -1157,8 +1167,9 @@ textarea.input {
 
 .toast {
   background: var(--card-2);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 999px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
   padding: 10px 18px;
   font-weight: 700;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
@@ -1203,12 +1214,12 @@ textarea.input {
 }
 
 .toast.ok {
-  border-color: var(--ok);
+  background: rgba(53, 199, 123, 0.16);
   color: var(--ok);
 }
 
 .toast.ng {
-  border-color: var(--ng);
+  background: rgba(255, 107, 107, 0.16);
   color: var(--ng);
 }
 
@@ -1250,8 +1261,7 @@ textarea.input {
 }
 
 .board-row.me {
-  background: rgba(77, 141, 255, 0.12);
-  outline: 1px solid rgba(77, 141, 255, 0.35);
+  background: rgba(var(--primary-rgb), 0.14);
 }
 
 .board-nick {
@@ -1405,7 +1415,7 @@ textarea.input {
 
 /* ルール設定の「詳細設定」（折りたたみ） */
 .rules-advanced {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--hairline);
   padding-top: 10px;
   text-align: left;
 }
@@ -1499,8 +1509,8 @@ textarea.input {
 }
 
 .badge.win {
-  border-color: var(--warn);
-  color: var(--warn);
+  background: rgba(var(--primary-rgb), 0.16);
+  color: var(--primary-text);
 }
 
 .bottom-me {
@@ -1630,7 +1640,7 @@ textarea.input {
 
 /* 開いている間は編集中だと分かるように枠を色付きにする */
 .bank-form.open {
-  border-color: var(--primary);
+  box-shadow: inset 0 2px 0 var(--primary), 0 -10px 22px rgba(0, 0, 0, 0.55);
 }
 
 .form-toggle {
@@ -1708,7 +1718,7 @@ textarea.input {
 
 /* 節の区切りは、線の上下にしっかり余白を取る */
 .io-section + .io-section {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--hairline);
   margin-top: 12px;
   padding-top: 24px;
 }
@@ -1820,12 +1830,12 @@ textarea.input {
 /* 編集中の問題は一覧でも分かるようにする */
 .bank-row.editing {
   border-color: var(--primary);
-  background: rgba(90, 140, 255, 0.1);
+  background: rgba(var(--primary-rgb), 0.1);
 }
 
 .bank-row.selected {
   border-color: var(--primary);
-  background: rgba(90, 140, 255, 0.18);
+  background: rgba(var(--primary-rgb), 0.16);
 }
 
 /* 未選択でも幅を取り、選んだときに行の中身がずれないようにする */
@@ -1903,8 +1913,7 @@ textarea.input {
   flex: none;
   gap: 8px;
   padding: 10px 12px;
-  border-color: var(--primary);
-  box-shadow: 0 -10px 22px rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 2px 0 var(--primary), 0 -10px 22px rgba(0, 0, 0, 0.55);
   text-align: left;
 }
 
@@ -2004,7 +2013,7 @@ textarea.input {
   justify-content: center;
   gap: 6px;
   padding: 8px;
-  border: 2px solid var(--border);
+  border: 2px solid transparent;
   border-radius: 18px;
   background: var(--card-2);
   color: var(--fg);
@@ -2082,7 +2091,7 @@ textarea.input {
 }
 
 .final-rank.final-top {
-  color: var(--warn);
+  color: var(--primary-text);
 }
 
 /* 答え・メモの手元表示（出題者のみ） */

@@ -28,6 +28,38 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* スクロールバーを暗い配色になじませる（既定の明るいバーが浮いて見えるため）。
+   Firefox 等は scrollbar-color、WebKit 系は ::-webkit-scrollbar で指定する */
+* {
+  scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3d4a5c;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* ---- 共通部品 ---- */
 
 .screen {
@@ -1632,14 +1664,16 @@ textarea.input {
 .io-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 14px 0 4px;
+  gap: 10px;
+  padding: 16px 0 6px;
   text-align: left;
 }
 
+/* 節の区切りは、線の上下にしっかり余白を取る */
 .io-section + .io-section {
   border-top: 1px solid var(--border);
-  padding-top: 14px;
+  margin-top: 12px;
+  padding-top: 24px;
 }
 
 .io-title {
@@ -1656,15 +1690,30 @@ textarea.input {
   color: var(--dim);
 }
 
-/* 選んだ形式の列の並び */
-.io-columns-line {
-  margin: 0;
-  padding: 6px 10px;
+/* 選んだ形式の列の並びと、その形式のプロンプト */
+.io-columns-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 10px;
   background: var(--bg);
   border-radius: 8px;
+}
+
+.io-columns-line {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   font-size: 0.74rem;
   color: var(--dim);
   overflow-wrap: anywhere;
+}
+
+.io-columns-row .btn-mini {
+  flex: none;
+  padding: 4px 8px;
+  font-size: 0.66rem;
+  white-space: nowrap;
 }
 
 /* お試し用のサンプルは普段使わないので、末尾に控えめに置く */

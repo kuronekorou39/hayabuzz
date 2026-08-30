@@ -200,7 +200,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   const pasteTypeSelect = el('select', { class: 'input paste-type-select' },
     QUESTION_TYPES.map((t) => el('option', { value: t, text: TYPE_LABEL[t] })))
   const pasteColumns = el('p', { class: 'io-columns-line', text: '' })
-  const promptBtn = el('button', { class: 'btn btn-small', text: 'AI依頼文をコピー', onclick: async () => {
+  const promptBtn = el('button', { class: 'btn btn-mini', text: '参考プロンプトをコピー', onclick: async () => {
     const { prompt } = PASTE_FORMATS[pasteTypeSelect.value]
     try {
       await navigator.clipboard.writeText(prompt)
@@ -211,7 +211,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
       promptBtn.textContent = '下に出しました'
     }
     setTimeout(() => {
-      promptBtn.textContent = 'AI依頼文をコピー'
+      promptBtn.textContent = '参考プロンプトをコピー'
     }, 1600)
   } })
 
@@ -369,9 +369,10 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
       el('section', { class: 'io-section' }, [
         el('h3', { class: 'io-title', text: '貼り付けて取り込む（1行1問・タブ区切り）' }),
         el('div', { class: 'settings-row' }, [el('span', { text: '形式' }), pasteTypeSelect]),
-        pasteColumns,
+        // 列の並びと、その形式で作らせるプロンプトは対で使うので横に並べる
+        el('div', { class: 'io-columns-row' }, [pasteColumns, promptBtn]),
         bankPaste,
-        el('div', { class: 'btn-row' }, [bankImportBtn, promptBtn]),
+        el('div', { class: 'btn-row' }, [bankImportBtn]),
         pasteNote,
       ]),
       el('section', { class: 'io-section' }, [

@@ -15,6 +15,7 @@ import {
 } from '../game/question-bank.js'
 import { SAMPLE_QUESTIONS } from '../game/sample-questions.js'
 import { backdropDismiss, el, popupOverlay } from '../util/dom.js'
+import { showToast } from './toast.js'
 
 // 問題集の UI。出題者のポップアップ（出題つき）と、編集専用ページ（出題なし）で共用する。
 
@@ -164,10 +165,6 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
 
   // プレースホルダは実際のタブ区切りの記入例（説明より見た方が早い）。中身は形式で切り替える
   const bankPaste = el('textarea', { class: 'input bank-paste', rows: '3' })
-  // 取り込み結果の案内（追加数と、重複などで飛ばした数）
-  // 結果は操作したボタンのすぐ下に出す（離れた場所だと画面外になって気づけない）
-  const pasteNote = el('p', { class: 'import-note', text: '' })
-  const fileNote = el('p', { class: 'import-note', text: '' })
 
   // 形式ごとの列の並び・記入例・AI への依頼文。
   // 形式は貼り付ける人が選ぶ（中身から推測すると、答えが「○」の早押し問題を
@@ -200,18 +197,19 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   const pasteTypeSelect = el('select', { class: 'input paste-type-select' },
     QUESTION_TYPES.map((t) => el('option', { value: t, text: TYPE_LABEL[t] })))
   const pasteColumns = el('p', { class: 'io-columns-line', text: '' })
-  const promptBtn = el('button', { class: 'btn btn-mini', text: '参考プロンプトをコピー', onclick: async () => {
+  const PROMPT_LABEL = '📋 プロンプト例'
+  const promptBtn = el('button', { class: 'btn btn-mini', title: 'プロンプト例をコピー', text: PROMPT_LABEL, onclick: async () => {
     const { prompt } = PASTE_FORMATS[pasteTypeSelect.value]
     try {
       await navigator.clipboard.writeText(prompt)
-      promptBtn.textContent = 'コピーしました'
+      promptBtn.textContent = '✓ コピー'
     } catch {
       // クリップボードが使えない環境では、貼り付け欄に出して手動コピーしてもらう
       bankPaste.value = prompt
       promptBtn.textContent = '下に出しました'
     }
     setTimeout(() => {
-      promptBtn.textContent = '参考プロンプトをコピー'
+      promptBtn.textContent = PROMPT_LABEL
     }, 1600)
   } })
 
@@ -223,13 +221,13 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   }
   pasteTypeSelect.addEventListener('change', syncPasteFormat)
 
-  function reportImport({ added, skipped }, target) {
+  // 取り込み結果は一時表示のトーストで知らせる（画面に残し続けない）
+  function reportImport({ added, skipped }) {
     const skip = skipped > 0 ? `（重複など ${skipped}問は取り込まず）` : ''
-    target.textContent = added > 0 ? `${added}問を追加しました${skip}` : `追加できる問題がありませんでした${skip}`
-    target.className = added > 0 ? 'import-note ok' : 'import-note ng'
-    for (const other of [pasteNote, fileNote]) {
-      if (other !== target) other.textContent = ''
-    }
+    showToast(
+      added > 0 ? `${added}問を追加しました${skip}` : `追加できる問題がありませんでした${skip}`,
+      added > 0 ? 'ok' : 'ng',
+    )
     saveBank(items)
     render()
   }
@@ -237,7 +235,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   const bankImportBtn = el('button', { class: 'btn btn-small btn-primary', text: '貼り付けから追加', onclick: () => {
     const result = importTsv(items, bankPaste.value, pasteTypeSelect.value)
     if (result.added > 0) bankPaste.value = ''
-    reportImport(result, pasteNote)
+    reportImport(result)
   } })
 
   // お試し用のサンプル問題（同じ問題は重複して入らない）
@@ -248,7 +246,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
       if (addQuestion(items, sample) !== null) added += 1
       else skipped += 1
     }
-    reportImport({ added, skipped }, pasteNote)
+    reportImport({ added, skipped })
   } })
 
   const exportNote = el('p', { class: 'io-note export-note', text: '' })
@@ -277,11 +275,10 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     reader.onload = () => {
       const questions = parseImport(String(reader.result))
       if (questions === null) {
-        fileNote.textContent = '読み込めませんでした（書き出したファイルを選んでください）'
-        fileNote.className = 'import-note ng'
+        showToast('読み込めませんでした（書き出したファイルを選んでください）', 'ng')
         return
       }
-      reportImport(applyImport(items, questions, { replace: replaceCheck.checked }), fileNote)
+      reportImport(applyImport(items, questions, { replace: replaceCheck.checked }))
     }
     reader.readAsText(file)
   })
@@ -373,7 +370,6 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
         el('div', { class: 'io-columns-row' }, [pasteColumns, promptBtn]),
         bankPaste,
         el('div', { class: 'btn-row' }, [bankImportBtn]),
-        pasteNote,
       ]),
       el('section', { class: 'io-section' }, [
         el('h3', { class: 'io-title', text: 'バックアップ・引っ越し' }),
@@ -383,7 +379,6 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
           el('span', { text: '読み込む前に、いまの問題集を空にする' }),
           replaceCheck,
         ]),
-        fileNote,
       ]),
       // お試し用。普段の操作では使わないので末尾に置く
       el('section', { class: 'io-section io-sample' }, [sampleBtn]),

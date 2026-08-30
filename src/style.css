@@ -1745,25 +1745,6 @@ textarea.input {
   font-size: 0.9em;
 }
 
-/* 取り込み結果の案内（成功・失敗で色を変える） */
-.import-note {
-  margin: 10px 0 0;
-  font-size: 0.78rem;
-  text-align: left;
-}
-
-.import-note:empty {
-  display: none;
-}
-
-.import-note.ok {
-  color: var(--ok);
-}
-
-.import-note.ng {
-  color: var(--warn);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .form-body,
   .form-caret {

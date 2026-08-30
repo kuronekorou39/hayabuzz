@@ -12,6 +12,7 @@ import { randomCode } from '../util/random.js'
 import { BUZZER_STYLES, getBuzzerStyle } from './buzzer-styles.js'
 import { buzzerSprite, spriteFormatReady } from './sprites.js'
 import { setLeaveGuard } from './leave-guard.js'
+import { showToast } from './toast.js'
 
 const SESSION_KEY = 'hayabuzz.sessionId'
 const NICK_KEY = 'hayabuzz.nick' // タブのセッション内のみ保持（localStorage には保存しない）
@@ -117,15 +118,7 @@ function startGame(app, roomCode, nick) {
   let pressedKey = null // 押下済みの受付回を識別する（再開放で armedAt が変わると再度押せる）
   let joinTimer = null
 
-  // --- 通知トースト（結果や順位は常設せず、一時表示で伝える） ---
-  const toastBox = el('div', { class: 'toasts' })
-
-  function showToast(text, kind = '') {
-    const toast = el('div', { class: `toast ${kind}`, text })
-    toastBox.append(toast)
-    setTimeout(() => toast.classList.add('fade'), 3200)
-    setTimeout(() => toast.remove(), 3900)
-  }
+  // 結果や順位は常設せず、一時表示のトーストで伝える（実体は ui/toast.js）
 
   // --- DOM ---
   const statusDot = el('span', { class: 'dot wait' })
@@ -368,7 +361,6 @@ function startGame(app, roomCode, nick) {
     boardOverlay,
     finalOverlay,
     diagOverlay,
-    toastBox,
   )
   // ポップアップは範囲外タップでも閉じる（接続系と結果発表は除く）
   backdropDismiss(settingsOverlay, boardOverlay, diagOverlay)

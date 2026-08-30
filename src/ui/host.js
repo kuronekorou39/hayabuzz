@@ -587,10 +587,10 @@ export function mountHost(app) {
 
   // 問題集の UI は編集専用ページと共用（出題つきで組み立てる）
   const bankPanel = createBankPanel({ items: bankItems, onAsk: loadFromBank, canAsk: canAskNow })
-  const renderBank = bankPanel.render
   const bankOverlay = popupOverlay('bank-overlay', bankPanel.root, { wide: true })
   const bankBtn = el('button', { class: 'link-btn', text: '問題集から選ぶ', onclick: () => {
-    renderBank()
+    // いまのルールの回答形式で絞って開く（○×のルールで4択の問題を見せても選べない）
+    bankPanel.presetType(game.rules.answerMode)
     bankOverlay.classList.remove('hidden')
   } })
 
@@ -610,9 +610,8 @@ export function mountHost(app) {
         rulesBtn,
         el('div', { class: 'card' }, [
           el('div', { class: 'topbar' }, [
-            // 問題集は「出題」の隣に控えめに置く（出題の材料を選ぶ導線なので）
-            el('span', { class: 'card-title' }, [el('h2', { text: '出題' }), bankBtn]),
-            hostQBadge,
+            el('span', { class: 'card-title' }, [el('h2', { text: '出題' }), hostQBadge]),
+            bankBtn, // 出題の材料を選ぶ導線なので、控えめに右端へ置く
           ]),
           stepBar,
           stepHint,

@@ -188,7 +188,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   const bankNoMatch = el('p', { class: 'placeholder', text: '見つかりませんでした' })
   const bankNote = el('p', { class: 'placeholder', text: '出題中は選べません（判定を終えるか、取り消してください）' })
   // 選んだ時点ではまだ配信されない、という点だけ伝える（選び方は見れば分かる）
-  const bankHint = el('p', { class: 'placeholder', text: '選んでも、まだ回答者には出ません（出題は「全員に出題」）' })
+  const bankHint = el('p', { class: 'placeholder', text: '選んでも、まだ回答者には出ません' })
 
   // プレースホルダは実際のタブ区切りの記入例（説明より見た方が早い）。中身は形式で切り替える
   const bankPaste = el('textarea', { class: 'input bank-paste', rows: '3' })
@@ -357,12 +357,9 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     exportNote.textContent = exportedAt !== null ? `前回の書き出し: ${new Date(exportedAt).toLocaleString()}` : ''
   }
 
+  // 行は選ぶだけ。決定は必ず「これにする」を押してもらう（触っただけで進まないように）
   function pickRow(item) {
-    // 選択中の行をもう一度押したら、そのまま決定（慣れれば行の上だけで完結する）
-    if (item.id === selectedId && onAsk !== null) {
-      askSelected()
-      return
-    }
+    if (item.id === selectedId) return
     selectedId = item.id
     render()
   }
@@ -500,8 +497,19 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   ])
   const root = el('div', { class: 'bank-panel' }, [listCard, formCard, selectionBar])
 
+  // いまのルールの回答形式に合わせて絞り込む。○×のルールで4択の問題を探しても
+  // 選べないので、開いた時点で候補を出せる問題だけに寄せる（解除はいつでもできる）
+  function presetType(type) {
+    // その形式の問題が1問も無いなら絞らない（空の一覧を見せても選びようがない）
+    const hasType = QUESTION_TYPES.includes(type) && items.some((item) => item.type === type)
+    filterType.value = hasType ? type : ''
+    filterText.value = '' // 開くたびに前回の検索は持ち越さない
+    selectedId = null
+    render()
+  }
+
   syncPasteFormat()
   render()
   // ioOverlay は呼び出し側で画面に配置する（問題集の上に重ねるため）
-  return { root, ioOverlay, render }
+  return { root, ioOverlay, render, presetType }
 }

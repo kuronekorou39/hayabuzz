@@ -72,9 +72,19 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   // サンプルの取り込み（既存3問 + サンプル。再度押しても重複しない）
   const withSamples = 3 + SAMPLE_QUESTIONS.length
   await host.page.getByRole('button', { name: /お試し用の問題/ }).click()
-  await expect(host.page.locator('.bank-row')).toHaveCount(withSamples)
   await host.page.getByRole('button', { name: /お試し用の問題/ }).click()
+  await host.page.locator('.io-overlay .overlay-close').click()
+  // 開いた時点ではルールの形式（早押し）で絞られているので、解除してから全件を数える
+  await host.page.getByRole('button', { name: '絞り込みを解除' }).click()
   await expect(host.page.locator('.bank-row')).toHaveCount(withSamples)
+
+  // 開き直すと、いまのルール（早押し）の形式で自動的に絞られる
+  await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
+  await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
+  await expect(host.page.locator('.bank-filter-type')).toHaveValue('buzzer')
+  const buzzerCount = 3 + SAMPLE_QUESTIONS.filter((q) => (q.type ?? 'buzzer') === 'buzzer').length
+  await expect(host.page.locator('.bank-row')).toHaveCount(buzzerCount)
+  await expect(host.page.locator('.type-badge').first()).toHaveText('早押し')
 
   await p1.context.close()
   await host.context.close()
@@ -226,10 +236,9 @@ test('4択問題: 問題集に登録して出題すると選択肢が配信さ�
   await host.page.getByRole('button', { name: '追加する' }).click()
   await host.page.locator('.form-toggle').click() // 追加フォームを閉じて一覧を見る
 
-  // 選択中の行をもう一度押すと「これにする」と同じ（慣れた人向けの近道）。
-  // 回答形式が4択に切り替わり、選択肢と正解が入力欄に読み込まれる
+  // 選んで「これにする」を押すと回答形式が4択に切り替わり、選択肢と正解が入力欄に読み込まれる
   await host.page.locator('.bank-row').click()
-  await host.page.locator('.bank-row.selected').click()
+  await host.page.getByRole('button', { name: 'これにする' }).click()
   await expect(host.page.locator('.ask-choice-input').nth(2)).toHaveValue('47')
   await expect(host.page.locator('.ask-correct-select')).toHaveValue('3')
 

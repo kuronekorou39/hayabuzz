@@ -187,8 +187,6 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   const bankPlaceholder = el('p', { class: 'placeholder', text: 'まだ問題がありません。下の「問題を追加」か、まとめて貼り付けて入れられます' })
   const bankNoMatch = el('p', { class: 'placeholder', text: '見つかりませんでした' })
   const bankNote = el('p', { class: 'placeholder', text: '出題中は選べません（判定を終えるか、取り消してください）' })
-  // 選んだ時点ではまだ配信されない、という点だけ伝える（選び方は見れば分かる）
-  const bankHint = el('p', { class: 'placeholder', text: '選んでも、まだ回答者には出ません' })
 
   // プレースホルダは実際のタブ区切りの記入例（説明より見た方が早い）。中身は形式で切り替える
   const bankPaste = el('textarea', { class: 'input bank-paste', rows: '3' })
@@ -452,7 +450,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   const ioOverlay = popupOverlay(
     'io-overlay',
     el('div', { class: 'card rules-card bank-io' }, [
-      el('h2', { text: 'まとめて入れる・持ち出す' }),
+      el('h2', { text: '取り込み・書き出し' }),
       el('section', { class: 'io-section' }, [
         el('h3', { class: 'io-title', text: '貼り付けて取り込む（1行1問・タブ区切り）' }),
         el('div', { class: 'settings-row' }, [el('span', { text: '形式' }), pasteTypeSelect]),
@@ -477,7 +475,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   backdropDismiss(ioOverlay)
   const ioBtn = el('button', {
     class: 'link-btn',
-    text: 'まとめて入れる・持ち出す',
+    text: '取り込み・書き出し',
     onclick: () => ioOverlay.classList.remove('hidden'),
   })
 
@@ -490,7 +488,6 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
       filterStatus,
     ]),
     bankNote,
-    ...(onAsk !== null ? [bankHint] : []),
     bankPlaceholder,
     bankNoMatch,
     bankRows,

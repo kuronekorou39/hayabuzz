@@ -1550,17 +1550,54 @@ textarea.input {
   overflow: visible;
 }
 
-/* 見出し行（見出し + 取り込み・書き出しの入口）。スクロールしても残す */
-.bank-head-row {
+/* 見出しと絞り込み。一覧をスクロールしても上部に残す */
+.bank-sticky {
   position: sticky;
   top: -12px;
   z-index: 1;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
   margin: -12px -12px 0;
   padding: 12px 12px 8px;
   background: var(--card);
+}
+
+/* 見出し行（見出し + 取り込み・書き出しの入口） */
+.bank-head-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* 絞り込み: 文字列と形式を横に並べる */
+.bank-filter {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.bank-filter .input {
+  padding: 7px 10px;
+  font-size: 0.8rem;
+}
+
+.bank-filter-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.bank-filter-type {
+  flex: none;
+  width: 8.5em;
+}
+
+/* 絞り込み中だけ、件数と解除の導線を出す */
+.bank-filter-status {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+  color: var(--dim);
+  font-size: 0.72rem;
 }
 
 /* 見出しは中央、入口は右端に置く（×ボタンと重ならないよう余白を確保） */
@@ -1836,11 +1873,35 @@ textarea.input {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  align-items: stretch;
 }
 
-.bank-actions .btn {
-  padding: 5px 10px;
+/* 出題者がここで繰り返し押すのは「選ぶ」だけ。編集・削除は控えめにする */
+.bank-pick {
+  padding: 10px 18px;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.bank-sub-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.bank-sub-actions .btn {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 0.68rem;
+}
+
+/* 編集専用ページには「選ぶ」がなく、編集・削除が主役なので小さくしない */
+.bank-actions.no-pick .bank-sub-actions {
+  flex-direction: column;
+}
+
+.bank-actions.no-pick .bank-sub-actions .btn {
+  padding: 6px 12px;
   font-size: 0.78rem;
 }
 

@@ -138,6 +138,24 @@ export function removeQuestion(items, id) {
   if (index >= 0) items.splice(index, 1)
 }
 
+// ○× の答えは内部では 'o'/'x' なので、画面と同じ記号でも探せるようにする
+const OX_SYMBOL = { o: '○', x: '×' }
+
+function searchTarget(item) {
+  const answer = item.type === 'ox' ? OX_SYMBOL[item.a] ?? '' : item.a
+  return [item.q, answer, item.memo, ...item.choices].join('\n').toLowerCase()
+}
+
+// 一覧の絞り込み。type が空なら全形式、text が空なら全件。
+// 文字列は問題文・答え・メモ・選択肢への部分一致で見る
+export function filterQuestions(items, { type = '', text = '' } = {}) {
+  const needle = text.trim().toLowerCase()
+  return items.filter((item) => {
+    if (type !== '' && item.type !== type) return false
+    return needle === '' || searchTarget(item).includes(needle)
+  })
+}
+
 // 出題時に履歴を積む（結果は判定時に recordOutcome で書き込む）
 export function markAsked(items, id, at) {
   const item = items.find((i) => i.id === id)

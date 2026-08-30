@@ -109,6 +109,49 @@ test('問題の編集: 一覧の「編集」でフォームに値が入り、保
   await host.context.close()
 })
 
+test('問題集の絞り込み: 形式と文字列で一覧を狭められ、解除で元に戻る', async ({ browser }) => {
+  // 部屋を開かない編集専用ページで確認する（絞り込みは通信に関係しない）
+  const context = await browser.newContext()
+  const page = await context.newPage()
+  await page.goto('/')
+  await page.getByRole('button', { name: '問題集を編集する' }).click()
+
+  // お試し用の問題をまとめて入れる
+  await page.getByRole('button', { name: 'まとめて入れる・持ち出す' }).click()
+  await page.getByRole('button', { name: /お試し用の問題/ }).click()
+  await page.locator('.io-overlay .overlay-close').click()
+  const all = SAMPLE_QUESTIONS.length
+  await expect(page.locator('.bank-row')).toHaveCount(all)
+  // 絞り込んでいないうちは件数表示を出さない
+  await expect(page.locator('.bank-filter-status')).toBeHidden()
+
+  // 形式で絞る
+  await page.locator('.bank-filter-type').selectOption('ox')
+  const oxCount = SAMPLE_QUESTIONS.filter((q) => q.type === 'ox').length
+  await expect(page.locator('.bank-row')).toHaveCount(oxCount)
+  await expect(page.locator('.bank-filter-status')).toContainText(`${oxCount}問 / 全${all}問`)
+  await expect(page.locator('.type-badge').first()).toHaveText('○×')
+
+  // 文字列で絞る（形式の条件と同時に効く）
+  await page.locator('.bank-filter-type').selectOption('')
+  await page.locator('.bank-filter-text').fill('日本')
+  const hits = await page.locator('.bank-row').count()
+  expect(hits).toBeGreaterThan(0)
+  expect(hits).toBeLessThan(all)
+
+  // 一致なしのときは案内を出す
+  await page.locator('.bank-filter-text').fill('該当しないはずの文字列')
+  await expect(page.locator('.bank-row')).toHaveCount(0)
+  await expect(page.getByText('見つかりませんでした')).toBeVisible()
+
+  // 解除で全件に戻る
+  await page.getByRole('button', { name: '絞り込みを解除' }).click()
+  await expect(page.locator('.bank-row')).toHaveCount(all)
+  await expect(page.locator('.bank-filter-status')).toBeHidden()
+
+  await context.close()
+})
+
 test('4択問題: 問題集に登録して出題すると選択肢が配信され、正解を1タップで発表できる', async ({ browser }) => {
   const host = await createRoom(browser)
   const p1 = await joinPlayer(browser, host.code, 'たろう')

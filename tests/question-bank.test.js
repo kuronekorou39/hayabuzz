@@ -3,6 +3,7 @@ import {
   addQuestion,
   applyImport,
   exportPayload,
+  filterQuestions,
   importTsv,
   parseImport,
 } from '../src/game/question-bank.js'
@@ -122,5 +123,50 @@ describe('ファイルへの書き出しと復元', () => {
     )
     expect(applyImport(items, incoming, { replace: true })).toEqual({ added: 1, skipped: 0 })
     expect(items.map((i) => i.q)).toEqual(['入れ替え後の問題'])
+  })
+})
+
+describe('一覧の絞り込み', () => {
+  const build = () => {
+    const items = []
+    addQuestion(items, { type: 'buzzer', q: '日本の首都は？', a: '東京', memo: '都道府県の話' })
+    addQuestion(items, { type: 'ox', q: 'カンガルーは後ろ向きに歩けない', a: 'o' })
+    addQuestion(items, { type: 'choice4', q: '五大陸で最大は？', choices: ['アフリカ', 'ユーラシア', '北米', '南米'], a: '2' })
+    return items
+  }
+
+  test('条件がなければ全件返す', () => {
+    const items = build()
+    expect(filterQuestions(items, {})).toHaveLength(3)
+    expect(filterQuestions(items, { type: '', text: '   ' })).toHaveLength(3)
+  })
+
+  test('形式で絞り込める', () => {
+    expect(filterQuestions(build(), { type: 'ox' }).map((i) => i.type)).toEqual(['ox'])
+  })
+
+  test('問題文・メモ・選択肢のどれに含まれていても見つかる', () => {
+    const items = build()
+    expect(filterQuestions(items, { text: '首都' }).map((i) => i.q)).toEqual(['日本の首都は？'])
+    expect(filterQuestions(items, { text: '都道府県' }).map((i) => i.q)).toEqual(['日本の首都は？'])
+    expect(filterQuestions(items, { text: 'ユーラシア' }).map((i) => i.q)).toEqual(['五大陸で最大は？'])
+  })
+
+  test('○× の答えは画面と同じ記号で探せる', () => {
+    expect(filterQuestions(build(), { text: '○' })).toHaveLength(1)
+    expect(filterQuestions(build(), { text: '×' })).toHaveLength(0)
+  })
+
+  test('英字の大文字小文字は区別しない', () => {
+    const items = []
+    addQuestion(items, { q: 'HTML の略は？', a: 'HyperText Markup Language' })
+    expect(filterQuestions(items, { text: 'html' })).toHaveLength(1)
+    expect(filterQuestions(items, { text: 'HYPERTEXT' })).toHaveLength(1)
+  })
+
+  test('形式と文字列は同時に効く', () => {
+    const items = build()
+    expect(filterQuestions(items, { type: 'buzzer', text: '首都' })).toHaveLength(1)
+    expect(filterQuestions(items, { type: 'ox', text: '首都' })).toHaveLength(0)
   })
 })

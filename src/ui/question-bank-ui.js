@@ -3,6 +3,7 @@ import {
   addQuestion,
   applyImport,
   exportPayload,
+  filterQuestions,
   getExportedAt,
   importTsv,
   parseImport,
@@ -158,8 +159,31 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     bankQInput.focus()
   })
 
+  // --- 絞り込み（問題が増えると目的の1問が探せなくなるため） ---
+  const filterText = el('input', {
+    class: 'input bank-filter-text', type: 'text', maxlength: 100,
+    placeholder: '問題文・答え・メモで探す',
+  })
+  const filterType = el('select', { class: 'input bank-filter-type' }, [
+    el('option', { value: '', text: 'すべての形式' }),
+    ...QUESTION_TYPES.map((t) => el('option', { value: t, text: TYPE_LABEL[t] })),
+  ])
+  filterText.addEventListener('input', () => render())
+  filterType.addEventListener('change', () => render())
+  const filterRow = el('div', { class: 'bank-filter' }, [filterText, filterType])
+  const filterCount = el('span', { text: '' })
+  const filterStatus = el('div', { class: 'bank-filter-status' }, [
+    filterCount,
+    el('button', { class: 'link-btn', text: '絞り込みを解除', onclick: () => {
+      filterText.value = ''
+      filterType.value = ''
+      render()
+    } }),
+  ])
+
   const bankRows = el('div', { class: 'bank-rows' })
   const bankPlaceholder = el('p', { class: 'placeholder', text: 'まだ問題がありません。下の「問題を追加」か、まとめて貼り付けて入れられます' })
+  const bankNoMatch = el('p', { class: 'placeholder', text: '見つかりませんでした' })
   const bankNote = el('p', { class: 'placeholder', text: '出題中は選べません（判定を終えるか、取り消してください）' })
   const bankHint = el('p', { class: 'placeholder', text: '「選ぶ」を押すと出題欄に読み込みます（出題は「全員に出題」で）' })
 
@@ -288,11 +312,21 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   ])
 
   function render() {
+    const filter = { type: filterType.value, text: filterText.value }
+    const filtering = filter.type !== '' || filter.text.trim() !== ''
+    const shown = filterQuestions(items, filter)
+
+    // 絞り込み欄は問題があるときだけ出す（空の問題集では邪魔になる）
+    filterRow.style.display = items.length === 0 ? 'none' : ''
+    filterStatus.style.display = filtering ? '' : 'none'
+    filterCount.textContent = `${shown.length}問 / 全${items.length}問`
     bankPlaceholder.style.display = items.length === 0 ? '' : 'none'
+    bankNoMatch.style.display = items.length > 0 && shown.length === 0 ? '' : 'none'
+
     const askable = onAsk !== null && canAsk()
     bankNote.style.display = onAsk !== null && !askable ? '' : 'none'
     bankRows.replaceChildren(
-      ...items.map((item) => {
+      ...shown.map((item) => {
         const answer = answerLabel(item.type, item.a, item.choices)
         return el('div', { class: item.id === editingId ? 'bank-row editing' : 'bank-row' }, [
           el('div', { class: 'bank-main' }, [
@@ -302,23 +336,26 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
             ]),
             el('span', { class: 'bank-meta', text: `${answer !== '' ? `答え: ${answer} · ` : ''}${formatAskedMeta(item)}` }),
           ]),
-          el('div', { class: 'bank-actions' }, [
+          el('div', { class: onAsk !== null ? 'bank-actions' : 'bank-actions no-pick' }, [
             // 編集専用ページでは出題できないのでボタン自体を出さない。
             // 押すと出題欄に読み込むだけで、出題は「全員に出題」で行う
             ...(onAsk !== null
-              ? [el('button', { class: 'btn btn-mini', text: '選ぶ', disabled: !askable, onclick: () => onAsk(item) })]
+              ? [el('button', { class: 'btn btn-primary bank-pick', text: '選ぶ', disabled: !askable, onclick: () => onAsk(item) })]
               : []),
-            // フォームを開く操作なので、外タップ扱いで閉じられないよう伝播を止める
-            el('button', { class: 'btn btn-mini', text: '編集', onclick: (ev) => {
-              ev.stopPropagation()
-              startEdit(item)
-            } }),
-            el('button', { class: 'btn btn-mini btn-ng', text: '削除', onclick: () => {
-              removeQuestion(items, item.id)
-              saveBank(items)
-              if (editingId === item.id) resetForm()
-              else render()
-            } }),
+            // 出題中に何度も押すのは「選ぶ」だけなので、編集・削除は控えめにまとめる
+            el('div', { class: 'bank-sub-actions' }, [
+              // フォームを開く操作なので、外タップ扱いで閉じられないよう伝播を止める
+              el('button', { class: 'btn btn-mini', text: '編集', onclick: (ev) => {
+                ev.stopPropagation()
+                startEdit(item)
+              } }),
+              el('button', { class: 'btn btn-mini btn-ng', text: '削除', onclick: () => {
+                removeQuestion(items, item.id)
+                saveBank(items)
+                if (editingId === item.id) resetForm()
+                else render()
+              } }),
+            ]),
           ]),
         ])
       }),
@@ -392,11 +429,17 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   })
 
   const listCard = el('div', { class: 'card rules-card bank-card' }, [
-    // 見出しの右端に入口を置く（一覧の中に節を挟まない）
-    el('div', { class: 'bank-head-row' }, [el('h2', { text: '問題集' }), ioBtn]),
+    // 見出しと絞り込みは、一覧を下までスクロールしても届くよう上部に貼り付ける
+    el('div', { class: 'bank-sticky' }, [
+      // 見出しの右端に入口を置く（一覧の中に節を挟まない）
+      el('div', { class: 'bank-head-row' }, [el('h2', { text: '問題集' }), ioBtn]),
+      filterRow,
+      filterStatus,
+    ]),
     bankNote,
     ...(onAsk !== null ? [bankHint] : []),
     bankPlaceholder,
+    bankNoMatch,
     bankRows,
   ])
   const root = el('div', { class: 'bank-panel' }, [listCard, formCard])

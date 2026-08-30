@@ -178,21 +178,21 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   const PROMPT_EXAMPLES = [
     {
       type: 'buzzer',
-      columns: '問題 / 答え / メモ',
+      columns: '問題 → 答え → メモ',
       prompt:
         'クイズを20問作ってください。1行1問、タブ区切りで「問題→答え→補足メモ」の順に出力してください。' +
         '前置き・番号・見出しは不要です。',
     },
     {
       type: 'ox',
-      columns: '問題 / ○ か × / メモ',
+      columns: '問題 → ○ か × → メモ',
       prompt:
         '○×クイズを20問作ってください。1行1問、タブ区切りで「問題→正解（○か×）→補足メモ」の順に出力してください。' +
         '前置き・番号・見出しは不要です。',
     },
     {
       type: 'choice4',
-      columns: '問題 / 選択肢1〜4 / 正解番号 / メモ',
+      columns: '問題 → 選択肢1〜4 → 正解番号 → メモ',
       prompt:
         '4択クイズを20問作ってください。1行1問、タブ区切りで' +
         '「問題→選択肢1→選択肢2→選択肢3→選択肢4→正解番号（1〜4）→補足メモ」の順に出力してください。' +
@@ -239,7 +239,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   } })
 
   // お試し用のサンプル問題（同じ問題は重複して入らない）
-  const sampleBtn = el('button', { class: 'btn btn-small', text: 'サンプルを入れる', onclick: () => {
+  const sampleBtn = el('button', { class: 'btn btn-small', text: `お試し用の問題${SAMPLE_QUESTIONS.length}問`, onclick: () => {
     let added = 0
     let skipped = 0
     for (const sample of SAMPLE_QUESTIONS) {
@@ -266,6 +266,11 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     const file = importFileInput.files[0]
     importFileInput.value = ''
     if (!file) return
+    // 入れ替えは元に戻せないので、実行前に確認する
+    if (replaceCheck.checked) {
+      const ok = window.confirm(`いまの問題集（${items.length}問）をすべて消して、ファイルの内容に入れ替えます。よろしいですか？`)
+      if (!ok) return
+    }
     const reader = new FileReader()
     reader.onload = () => {
       const questions = parseImport(String(reader.result))
@@ -362,7 +367,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     el('div', { class: 'card rules-card bank-io' }, [
       el('h2', { text: 'まとめて入れる・持ち出す' }),
       el('section', { class: 'io-section' }, [
-        el('h3', { class: 'io-title', text: '貼り付けて取り込む' }),
+        el('h3', { class: 'io-title', text: '貼り付けて取り込む（1行1問・タブ区切り）' }),
         el('ul', { class: 'io-formats' }, promptRows),
         bankPaste,
         el('div', { class: 'btn-row' }, [bankImportBtn, sampleBtn]),
@@ -370,7 +375,6 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
       ]),
       el('section', { class: 'io-section' }, [
         el('h3', { class: 'io-title', text: 'バックアップ・引っ越し' }),
-        el('p', { class: 'io-note', text: '問題集をまるごとファイルに保存します。ブラウザの保存は消えることがあるので、このファイルを正本にしてください' }),
         exportNote,
         el('div', { class: 'btn-row' }, [exportBtn, importLabel]),
         el('label', { class: 'settings-row io-replace' }, [

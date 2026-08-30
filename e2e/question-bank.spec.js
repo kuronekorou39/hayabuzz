@@ -68,9 +68,9 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
 
   // サンプルの取り込み（既存3問 + サンプル。再度押しても重複しない）
   const withSamples = 3 + SAMPLE_QUESTIONS.length
-  await host.page.getByRole('button', { name: 'サンプルを入れる' }).click()
+  await host.page.getByRole('button', { name: /お試し用の問題/ }).click()
   await expect(host.page.locator('.bank-row')).toHaveCount(withSamples)
-  await host.page.getByRole('button', { name: 'サンプルを入れる' }).click()
+  await host.page.getByRole('button', { name: /お試し用の問題/ }).click()
   await expect(host.page.locator('.bank-row')).toHaveCount(withSamples)
 
   await p1.context.close()

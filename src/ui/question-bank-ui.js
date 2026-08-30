@@ -108,6 +108,8 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   bankTypeSelect.addEventListener('change', () => bankFields.sync(bankTypeSelect.value))
   bankFields.sync(bankTypeSelect.value)
 
+  // 一覧で選んでいる1問。編集・削除・出題はこの選択に対して行う
+  let selectedId = null
   // 追加と編集で同じフォームを使う。editingId が null なら新規追加
   let editingId = null
   const formTitle = el('span', { class: 'form-title', text: '問題を追加' })
@@ -185,7 +187,8 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   const bankPlaceholder = el('p', { class: 'placeholder', text: 'まだ問題がありません。下の「問題を追加」か、まとめて貼り付けて入れられます' })
   const bankNoMatch = el('p', { class: 'placeholder', text: '見つかりませんでした' })
   const bankNote = el('p', { class: 'placeholder', text: '出題中は選べません（判定を終えるか、取り消してください）' })
-  const bankHint = el('p', { class: 'placeholder', text: '「選ぶ」を押すと出題欄に読み込みます（出題は「全員に出題」で）' })
+  // 選んだ時点ではまだ配信されない、という点だけ伝える（選び方は見れば分かる）
+  const bankHint = el('p', { class: 'placeholder', text: '選んでも、まだ回答者には出ません（出題は「全員に出題」）' })
 
   // プレースホルダは実際のタブ区切りの記入例（説明より見た方が早い）。中身は形式で切り替える
   const bankPaste = el('textarea', { class: 'input bank-paste', rows: '3' })
@@ -315,6 +318,8 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     const filter = { type: filterType.value, text: filterText.value }
     const filtering = filter.type !== '' || filter.text.trim() !== ''
     const shown = filterQuestions(items, filter)
+    // 見えない問題は操作させない（絞り込みで一覧から外れた場合）
+    if (selectedId !== null && !shown.some((item) => item.id === selectedId)) selectedId = null
 
     // 絞り込み欄は問題があるときだけ出す（空の問題集では邪魔になる）
     filterRow.style.display = items.length === 0 ? 'none' : ''
@@ -323,45 +328,51 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     bankPlaceholder.style.display = items.length === 0 ? '' : 'none'
     bankNoMatch.style.display = items.length > 0 && shown.length === 0 ? '' : 'none'
 
-    const askable = onAsk !== null && canAsk()
-    bankNote.style.display = onAsk !== null && !askable ? '' : 'none'
+    bankNote.style.display = onAsk !== null && !canAsk() ? '' : 'none'
+    // 行そのものが選択ボタン。1問への操作は下部のバーにまとめる
+    // （問題ごとにボタンを並べると、ボタンの方が一覧の主役になってしまう）
     bankRows.replaceChildren(
       ...shown.map((item) => {
         const answer = answerLabel(item.type, item.a, item.choices)
-        return el('div', { class: item.id === editingId ? 'bank-row editing' : 'bank-row' }, [
-          el('div', { class: 'bank-main' }, [
-            el('div', { class: 'bank-head' }, [
+        const selected = item.id === selectedId
+        return el('button', {
+          class: `bank-row${selected ? ' selected' : ''}${item.id === editingId ? ' editing' : ''}`,
+          'aria-pressed': String(selected),
+          onclick: () => pickRow(item),
+        }, [
+          // 未選択でも幅を取り、選んだときに行の中身が動かないようにする
+          el('span', { class: 'bank-check', text: '✓' }),
+          el('span', { class: 'bank-main' }, [
+            el('span', { class: 'bank-head' }, [
               el('span', { class: `type-badge type-${item.type}`, text: TYPE_LABEL[item.type] }),
               el('span', { class: 'bank-q', text: item.q }),
             ]),
             el('span', { class: 'bank-meta', text: `${answer !== '' ? `答え: ${answer} · ` : ''}${formatAskedMeta(item)}` }),
           ]),
-          el('div', { class: onAsk !== null ? 'bank-actions' : 'bank-actions no-pick' }, [
-            // 編集専用ページでは出題できないのでボタン自体を出さない。
-            // 押すと出題欄に読み込むだけで、出題は「全員に出題」で行う
-            ...(onAsk !== null
-              ? [el('button', { class: 'btn btn-primary bank-pick', text: '選ぶ', disabled: !askable, onclick: () => onAsk(item) })]
-              : []),
-            // 出題中に何度も押すのは「選ぶ」だけなので、編集・削除は控えめにまとめる
-            el('div', { class: 'bank-sub-actions' }, [
-              // フォームを開く操作なので、外タップ扱いで閉じられないよう伝播を止める
-              el('button', { class: 'btn btn-mini', text: '編集', onclick: (ev) => {
-                ev.stopPropagation()
-                startEdit(item)
-              } }),
-              el('button', { class: 'btn btn-mini btn-ng', text: '削除', onclick: () => {
-                removeQuestion(items, item.id)
-                saveBank(items)
-                if (editingId === item.id) resetForm()
-                else render()
-              } }),
-            ]),
-          ]),
         ])
       }),
     )
+    renderSelection()
     const exportedAt = getExportedAt()
     exportNote.textContent = exportedAt !== null ? `前回の書き出し: ${new Date(exportedAt).toLocaleString()}` : ''
+  }
+
+  function pickRow(item) {
+    // 選択中の行をもう一度押したら、そのまま決定（慣れれば行の上だけで完結する）
+    if (item.id === selectedId && onAsk !== null) {
+      askSelected()
+      return
+    }
+    selectedId = item.id
+    render()
+  }
+
+  function askSelected() {
+    const item = items.find((i) => i.id === selectedId)
+    if (item === undefined || onAsk === null || !canAsk()) return
+    selectedId = null
+    render()
+    onAsk(item) // 出題欄への読み込みとポップアップを閉じるのは呼び出し側
   }
 
   // 追加・編集フォームは一覧とは別のカードにして下部に貼り付ける。
@@ -384,14 +395,59 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   ])
   const formCard = el('div', { class: 'card bank-form' }, [formToggle, formBody])
 
+  // 選んだ1問への操作。「問題を追加」と同じ場所に差し替えで出す（下部を2段にしない）
+  const selQ = el('span', { class: 'sel-q', text: '' })
+  const selAskBtn = onAsk !== null
+    ? el('button', { class: 'btn btn-primary sel-ask', text: 'これにする', onclick: () => askSelected() })
+    : null
+  const selectionBar = el('div', { class: `card bank-selection${selAskBtn === null ? ' no-ask' : ''}` }, [
+    el('div', { class: 'sel-head' }, [
+      selQ,
+      el('button', { class: 'sel-clear', title: '選択を解除', text: '×', onclick: () => {
+        selectedId = null
+        render()
+      } }),
+    ]),
+    el('div', { class: 'sel-actions' }, [
+      el('button', { class: 'btn btn-small', text: '編集', onclick: () => {
+        const item = items.find((i) => i.id === selectedId)
+        if (item !== undefined) startEdit(item)
+      } }),
+      el('button', { class: 'btn btn-small btn-ng', text: '削除', onclick: () => {
+        const item = items.find((i) => i.id === selectedId)
+        if (item === undefined) return
+        // 選んでから消す形なので、取り違えたまま実行しないよう確認する
+        if (!window.confirm(`「${item.q}」を削除します。よろしいですか？`)) return
+        removeQuestion(items, item.id)
+        saveBank(items)
+        selectedId = null
+        if (editingId === item.id) resetForm()
+        else render()
+      } }),
+      ...(selAskBtn !== null ? [selAskBtn] : []),
+    ]),
+  ])
+
+  // 選択中はフォームの代わりに操作バーを出す（フォームを開いている間はフォーム優先）
+  function renderSelection() {
+    const item = selectedId !== null ? items.find((i) => i.id === selectedId) : undefined
+    const showBar = item !== undefined && !formCard.classList.contains('open')
+    selectionBar.style.display = showBar ? '' : 'none'
+    formCard.style.display = showBar ? 'none' : ''
+    if (item !== undefined) selQ.textContent = item.q
+    if (selAskBtn !== null) selAskBtn.disabled = !canAsk()
+  }
+
   function setFormOpen(open) {
     formCard.classList.toggle('open', open)
     formToggle.setAttribute('aria-expanded', String(open))
+    renderSelection() // 開閉に合わせて、下部をフォームと操作バーで入れ替える
   }
   formToggle.addEventListener('click', () => setFormOpen(!formCard.classList.contains('open')))
   // 開いたままだと一覧や取り込みの操作を覆ってしまうため、フォームの外をタップしたら閉じる。
   // フォーム内のクリックはここで止める（要素が作り直されても誤判定しないように）
   formCard.addEventListener('click', (ev) => ev.stopPropagation())
+  selectionBar.addEventListener('click', (ev) => ev.stopPropagation())
   document.addEventListener('click', () => setFormOpen(false))
 
   // 「まとめて入れる」と「ファイルで持ち運ぶ」は目的が違うので節を分ける。
@@ -442,7 +498,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     bankNoMatch,
     bankRows,
   ])
-  const root = el('div', { class: 'bank-panel' }, [listCard, formCard])
+  const root = el('div', { class: 'bank-panel' }, [listCard, formCard, selectionBar])
 
   syncPasteFormat()
   render()

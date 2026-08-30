@@ -15,8 +15,10 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   await host.page.getByRole('button', { name: '追加する' }).click()
   await expect(host.page.locator('.bank-row')).toHaveCount(1)
 
-  // 一覧から「選ぶ」= 出題欄に読み込むだけ。この時点ではまだ回答者には出ない
-  await host.page.locator('.bank-row').getByRole('button', { name: '選ぶ' }).click()
+  // 行をタップして選び「これにする」= 出題欄に読み込むだけ。この時点ではまだ回答者には出ない
+  await host.page.locator('.bank-row').click()
+  await expect(host.page.locator('.bank-selection')).toContainText('富士山の標高は？')
+  await host.page.getByRole('button', { name: 'これにする' }).click()
   await expect(host.page.locator('.question-input')).toHaveValue('富士山の標高は？')
   await expect(host.page.locator('.ask-a-input')).toHaveValue('3776m') // 答えも入力欄に入る
   await expect(host.page.locator('.answer-note')).toContainText('メモ: メートル単位で回答')
@@ -33,7 +35,8 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
 
   // 出題中は問題集から選び直せない
   await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
-  await expect(host.page.locator('.bank-row').getByRole('button', { name: '選ぶ' })).toBeDisabled()
+  await host.page.locator('.bank-row').click()
+  await expect(host.page.getByRole('button', { name: 'これにする' })).toBeDisabled()
   await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
 
   // 判定まで進めると出題履歴に正解者名が残る
@@ -89,8 +92,9 @@ test('問題の編集: 一覧の「編集」でフォームに値が入り、保
   await host.page.getByRole('button', { name: '追加する' }).click()
   await expect(host.page.locator('.bank-row')).toHaveCount(1)
 
-  // 「編集」を押すとフォームに値が入った状態で開く
-  await host.page.locator('.bank-row').getByRole('button', { name: '編集' }).click()
+  // 選んでから「編集」を押すとフォームに値が入った状態で開く
+  await host.page.locator('.bank-row').click()
+  await host.page.locator('.bank-selection').getByRole('button', { name: '編集' }).click()
   await expect(host.page.locator('.bank-q-input')).toHaveValue('富士山は日本一高い山である')
   await expect(host.page.locator('.bank-type-select')).toHaveValue('ox')
   await expect(host.page.locator('.bank-ox-select')).toHaveValue('o')
@@ -152,6 +156,59 @@ test('問題集の絞り込み: 形式と文字列で一覧を狭められ、解
   await context.close()
 })
 
+test('問題集の選択: 行を選ぶと下部が操作バーに変わり、削除は確認を挟む', async ({ browser }) => {
+  const context = await browser.newContext()
+  const page = await context.newPage()
+  await page.goto('/')
+  await page.getByRole('button', { name: '問題集を編集する' }).click()
+
+  // 2問だけ用意する
+  await page.locator('.form-toggle').click()
+  await page.locator('.bank-q-input').fill('1問目')
+  await page.getByRole('button', { name: '追加する' }).click()
+  await page.locator('.bank-q-input').fill('2問目')
+  await page.getByRole('button', { name: '追加する' }).click()
+  await expect(page.locator('.bank-row')).toHaveCount(2)
+
+  // 選んでいないうちは「問題を追加」が下部にいる
+  await expect(page.locator('.bank-form')).toBeVisible()
+  await expect(page.locator('.bank-selection')).toBeHidden()
+
+  // 行を選ぶと、同じ場所が操作バーに入れ替わる（下部を2段にしない）
+  await page.locator('.bank-row').first().click()
+  await expect(page.locator('.bank-selection')).toBeVisible()
+  await expect(page.locator('.bank-selection')).toContainText('1問目')
+  await expect(page.locator('.bank-form')).toBeHidden()
+  await expect(page.locator('.bank-row.selected')).toHaveCount(1)
+  // 編集専用ページには「これにする」がない
+  await expect(page.getByRole('button', { name: 'これにする' })).toHaveCount(0)
+
+  // 別の行を選ぶと選択が移る
+  await page.locator('.bank-row').nth(1).click()
+  await expect(page.locator('.bank-selection')).toContainText('2問目')
+
+  // 削除は確認を挟む。取り消せば消えない
+  page.once('dialog', (dialog) => dialog.dismiss())
+  await page.locator('.bank-selection').getByRole('button', { name: '削除' }).click()
+  await expect(page.locator('.bank-row')).toHaveCount(2)
+
+  // 承認すれば消え、選択が外れて「問題を追加」に戻る
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.locator('.bank-selection').getByRole('button', { name: '削除' }).click()
+  await expect(page.locator('.bank-row')).toHaveCount(1)
+  await expect(page.locator('.bank-selection')).toBeHidden()
+  await expect(page.locator('.bank-form')).toBeVisible()
+
+  // ×で選択を解除しても「問題を追加」に戻る
+  await page.locator('.bank-row').first().click()
+  await expect(page.locator('.bank-selection')).toBeVisible()
+  await page.locator('.sel-clear').click()
+  await expect(page.locator('.bank-selection')).toBeHidden()
+  await expect(page.locator('.bank-form')).toBeVisible()
+
+  await context.close()
+})
+
 test('4択問題: 問題集に登録して出題すると選択肢が配信され、正解を1タップで発表できる', async ({ browser }) => {
   const host = await createRoom(browser)
   const p1 = await joinPlayer(browser, host.code, 'たろう')
@@ -169,8 +226,10 @@ test('4択問題: 問題集に登録して出題すると選択肢が配信さ�
   await host.page.getByRole('button', { name: '追加する' }).click()
   await host.page.locator('.form-toggle').click() // 追加フォームを閉じて一覧を見る
 
-  // 「選ぶ」で回答形式が4択に切り替わり、選択肢と正解が入力欄に読み込まれる
-  await host.page.locator('.bank-row').getByRole('button', { name: '選ぶ' }).click()
+  // 選択中の行をもう一度押すと「これにする」と同じ（慣れた人向けの近道）。
+  // 回答形式が4択に切り替わり、選択肢と正解が入力欄に読み込まれる
+  await host.page.locator('.bank-row').click()
+  await host.page.locator('.bank-row.selected').click()
   await expect(host.page.locator('.ask-choice-input').nth(2)).toHaveValue('47')
   await expect(host.page.locator('.ask-correct-select')).toHaveValue('3')
 

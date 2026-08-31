@@ -5,7 +5,8 @@ import { createBankPanel } from './question-bank-ui.js'
 // 問題集の編集専用ページ。部屋を開かない（＝P2P接続を持たない）ので、
 // 大きい画面でじっくり作り込んでも進行中の接続に影響しない。
 export function mountBankPage(app, { onBack }) {
-  const panel = createBankPanel({ items: loadBank() })
+  // 見出しはページ側の「問題集」だけにする（カードにも出すと同じ語が2つ並ぶ）
+  const panel = createBankPanel({ items: loadBank(), showTitle: false })
   app.replaceChildren(
     el('div', { class: 'screen bank-page' }, [
       el('div', { class: 'topbar' }, [
@@ -13,10 +14,11 @@ export function mountBankPage(app, { onBack }) {
           el('span', { class: 'brand', text: 'Hayabuzz' }),
           el('span', { class: 'role', text: '問題集' }),
         ]),
-        el('button', { class: 'btn btn-small', text: 'トップへ戻る', onclick: onBack }),
+        el('div', { class: 'bank-page-actions' }, [
+          panel.ioBtn,
+          el('button', { class: 'btn btn-small', text: '← トップへ戻る', onclick: onBack }),
+        ]),
       ]),
-      // 説明はカードの前に置く（カードを最後の要素にして、下部のフォームを画面下端に貼り付ける）
-      el('p', { class: 'placeholder', text: 'ここで作った問題は、出題者画面の「問題集」からそのまま出題できます' }),
       panel.root,
     ]),
     panel.ioOverlay,

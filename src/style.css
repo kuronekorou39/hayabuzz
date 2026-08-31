@@ -1887,6 +1887,28 @@ input[type='checkbox']:focus-visible {
   flex: 1;
 }
 
+/* ページ見出しの右にまとめる。狭い画面では折り返して重ならないようにする */
+.bank-page .topbar {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.bank-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.bank-page-actions .link-btn {
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.bank-page-actions .btn {
+  white-space: nowrap;
+}
+
 /* 行そのものが選択ボタン（問題ごとにボタンを並べない） */
 .bank-row {
   display: flex;

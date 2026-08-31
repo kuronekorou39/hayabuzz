@@ -98,7 +98,7 @@ function formatAskedMeta(item) {
 //   items  : 問題の配列（呼び出し側と共有する。保存はこの中で行う）
 //   onAsk  : 「出題」を押したときの処理。省略すると出題ボタン自体を出さない（編集専用ページ）
 //   canAsk : いま出題できるか（進行中は選ばせない）
-export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
+export function createBankPanel({ items, onAsk = null, canAsk = () => true, showTitle = true }) {
   const bankTypeSelect = el('select', { class: 'input bank-type-select' },
     QUESTION_TYPES.map((t) => el('option', { value: t, text: TYPE_LABEL[t] })))
   const bankQInput = el('textarea', { class: 'input bank-q-input', rows: '2', placeholder: '問題文', maxlength: CONFIG.questionMaxLen })
@@ -496,16 +496,17 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   )
   backdropDismiss(ioOverlay)
   const ioBtn = el('button', {
-    class: 'link-btn',
-    text: '取り込み・書き出し',
+    class: 'link-btn bank-io-btn',
+    text: '⇅ 取り込み・書き出し',
     onclick: () => ioOverlay.classList.remove('hidden'),
   })
 
   const listCard = el('div', { class: 'card rules-card bank-card' }, [
     // 見出しと絞り込みは、一覧を下までスクロールしても届くよう上部に貼り付ける
     el('div', { class: 'bank-sticky' }, [
-      // 見出しの右端に入口を置く（一覧の中に節を挟まない）
-      el('div', { class: 'bank-head-row' }, [el('h2', { text: '問題集' }), ioBtn]),
+      // 見出しの右端に入口を置く（一覧の中に節を挟まない）。
+      // ページ側に見出しがある場合は、呼び出し側が ioBtn を好きな場所へ置く
+      ...(showTitle ? [el('div', { class: 'bank-head-row' }, [el('h2', { text: '問題集' }), ioBtn])] : []),
       filterRow,
       filterStatus,
     ]),
@@ -530,5 +531,5 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   syncPasteFormat()
   render()
   // ioOverlay は呼び出し側で画面に配置する（問題集の上に重ねるため）
-  return { root, ioOverlay, render, presetType }
+  return { root, ioOverlay, ioBtn, render, presetType }
 }

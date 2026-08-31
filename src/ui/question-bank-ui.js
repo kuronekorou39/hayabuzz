@@ -118,13 +118,32 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true, show
   let selectedId = null
   // 追加と編集で同じフォームを使う。editingId が null なら新規追加
   let editingId = null
+  // 編集開始時の内容。1文字も変えていないのに「保存する」を押せると、
+  // 押してよいのか迷わせるので、変わったときだけ押せるようにする
+  let editingOrigin = null
   const formTitle = el('span', { class: 'form-title', text: '問題を追加' })
   const formError = el('p', { class: 'form-error bank-form-error', text: '' })
   const bankAddBtn = el('button', { class: 'btn btn-primary btn-small', text: '追加する' })
   const bankCancelBtn = el('button', { class: 'btn btn-small hidden', text: 'やめる', onclick: () => resetForm() })
 
+  function readForm() {
+    const type = bankTypeSelect.value
+    const { raw, choices } = bankFields.read(type)
+    return { type, q: bankQInput.value, a: raw, choices, memo: bankMemoInput.value }
+  }
+
+  // 4択以外は選択肢を持たないので、比べる対象から外す
+  function formKey({ type, q, a, choices, memo }) {
+    return JSON.stringify([type, q.trim(), a, type === 'choice4' ? choices : [], memo])
+  }
+
+  function syncSaveEnabled() {
+    bankAddBtn.disabled = editingOrigin !== null && formKey(readForm()) === editingOrigin
+  }
+
   function resetForm() {
     editingId = null
+    editingOrigin = null
     bankQInput.value = ''
     bankMemoInput.value = ''
     bankFields.clear()
@@ -132,6 +151,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true, show
     formTitle.textContent = '問題を追加'
     bankAddBtn.textContent = '追加する'
     bankCancelBtn.classList.add('hidden')
+    syncSaveEnabled()
     render()
   }
 
@@ -147,15 +167,17 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true, show
     formTitle.textContent = '問題を編集'
     bankAddBtn.textContent = '保存する'
     bankCancelBtn.classList.remove('hidden')
+    // 入力欄に入れ終えた状態を基準にする（問題そのものと比べると、
+    // 選択肢の数など保存されていない差で最初から押せてしまう）
+    editingOrigin = formKey(readForm())
+    syncSaveEnabled()
     setFormOpen(true)
     render()
     bankQInput.focus()
   }
 
   bankAddBtn.addEventListener('click', () => {
-    const type = bankTypeSelect.value
-    const { raw, choices } = bankFields.read(type)
-    const spec = { type, q: bankQInput.value, a: raw, choices, memo: bankMemoInput.value }
+    const spec = readForm()
     const saved = editingId !== null ? updateQuestion(items, editingId, spec) : addQuestion(items, spec)
     if (saved === null) {
       formError.textContent =
@@ -386,7 +408,10 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true, show
   function pickRow(item) {
     if (item.id === selectedId) return
     selectedId = item.id
-    render()
+    // 編集中に別の問題を選んだら、その編集は終わりにする。
+    // 続けると編集中の行と選択中の行が同時に光って、どちらの操作なのか分からなくなる
+    if (editingId !== null) resetForm()
+    else render()
   }
 
   function askSelected() {
@@ -416,6 +441,9 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true, show
       el('div', { class: 'btn-row' }, [bankAddBtn, bankCancelBtn]),
     ]),
   ])
+  // 入力欄は形式を変えるたびに作り直されるので、個別にではなく箱の側で拾う
+  formBody.addEventListener('input', syncSaveEnabled)
+  formBody.addEventListener('change', syncSaveEnabled)
   const formCard = el('div', { class: 'card bank-form' }, [formToggle, formBody])
 
   // 選んだ1問への操作。「問題を追加」と同じ場所に差し替えで出す（下部を2段にしない）

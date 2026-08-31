@@ -114,7 +114,15 @@ test('問題の編集: 一覧の「編集」でフォームに値が入り、保
   await expect(host.page.locator('.bank-ox-select')).toHaveValue('o')
   await expect(host.page.locator('.bank-row')).toHaveClass(/\bediting\b/) // 編集中が一覧でも分かる
 
+  // 何も変えていないうちは保存できない
+  await expect(host.page.getByRole('button', { name: '保存する' })).toBeDisabled()
+
   // 書き換えて保存 → 一覧に反映され、増えない
+  await host.page.locator('.bank-q-input').fill('富士山は世界一高い山である')
+  await expect(host.page.getByRole('button', { name: '保存する' })).toBeEnabled()
+  // 元に戻すとまた押せなくなる
+  await host.page.locator('.bank-q-input').fill('富士山は日本一高い山である')
+  await expect(host.page.getByRole('button', { name: '保存する' })).toBeDisabled()
   await host.page.locator('.bank-q-input').fill('富士山は世界一高い山である')
   await host.page.locator('.bank-ox-select').selectOption('x')
   await host.page.getByRole('button', { name: '保存する' }).click()
@@ -198,6 +206,16 @@ test('問題集の選択: 行を選ぶと下部が操作バーに変わり、削
   await expect(page.getByRole('button', { name: 'これにする' })).toHaveCount(0)
 
   // 別の行を選ぶと選択が移る
+  await page.locator('.bank-row').nth(1).click()
+  await expect(page.locator('.bank-selection')).toContainText('2問目')
+
+  // 編集中に別の行を選ぶと、その編集は終わる（2行が同時に光ったままにならない）
+  await page.locator('.bank-selection').getByRole('button', { name: '編集' }).click()
+  await expect(page.locator('.bank-row.editing')).toHaveCount(1)
+  await page.locator('.bank-row').first().click()
+  await expect(page.locator('.bank-row.editing')).toHaveCount(0)
+  await expect(page.locator('.bank-row.selected')).toHaveCount(1)
+  await expect(page.locator('.form-title')).toHaveText('問題を追加')
   await page.locator('.bank-row').nth(1).click()
   await expect(page.locator('.bank-selection')).toContainText('2問目')
 

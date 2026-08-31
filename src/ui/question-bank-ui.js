@@ -173,14 +173,20 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   filterText.addEventListener('input', () => render())
   filterType.addEventListener('change', () => render())
   const filterRow = el('div', { class: 'bank-filter' }, [filterText, filterType])
-  const filterCount = el('span', { text: '' })
+
+  // 出題回数・日付・正解者は、普段の出題では読まない情報なので既定では出さない
+  const detailCheck = el('input', { class: 'bank-detail-check', type: 'checkbox' })
+  detailCheck.addEventListener('change', () => render())
+
+  const filterCount = el('span', { class: 'bank-count', text: '' })
+  const filterClearBtn = el('button', { class: 'link-btn', text: '絞り込みを解除', onclick: () => {
+    filterText.value = ''
+    filterType.value = ''
+    render()
+  } })
   const filterStatus = el('div', { class: 'bank-filter-status' }, [
-    filterCount,
-    el('button', { class: 'link-btn', text: '絞り込みを解除', onclick: () => {
-      filterText.value = ''
-      filterType.value = ''
-      render()
-    } }),
+    el('span', { class: 'bank-status-left' }, [filterCount, filterClearBtn]),
+    el('label', { class: 'bank-detail-toggle' }, [el('span', { text: '出題状況' }), detailCheck]),
   ])
 
   const bankRows = el('div', { class: 'bank-rows' })
@@ -321,8 +327,10 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
 
     // 絞り込み欄は問題があるときだけ出す（空の問題集では邪魔になる）
     filterRow.style.display = items.length === 0 ? 'none' : ''
-    filterStatus.style.display = filtering ? '' : 'none'
-    filterCount.textContent = `${shown.length}問 / 全${items.length}問`
+    filterStatus.style.display = items.length === 0 ? 'none' : ''
+    // 件数と解除の導線は、絞り込んでいるときだけ意味がある
+    filterCount.textContent = filtering ? `${shown.length}問 / 全${items.length}問` : `${items.length}問`
+    filterClearBtn.style.display = filtering ? '' : 'none'
     bankPlaceholder.style.display = items.length === 0 ? '' : 'none'
     bankNoMatch.style.display = items.length > 0 && shown.length === 0 ? '' : 'none'
 
@@ -332,6 +340,11 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
     bankRows.replaceChildren(
       ...shown.map((item) => {
         const answer = answerLabel(item.type, item.a, item.choices)
+        // 答えは常に、出題状況（回数・日付・正解者）は切り替えたときだけ添える
+        const meta = [
+          answer !== '' ? `答え: ${answer}` : '',
+          detailCheck.checked ? formatAskedMeta(item) : '',
+        ].filter((part) => part !== '').join(' · ')
         const selected = item.id === selectedId
         return el('button', {
           class: `bank-row${selected ? ' selected' : ''}${item.id === editingId ? ' editing' : ''}`,
@@ -345,7 +358,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
               el('span', { class: `type-badge type-${item.type}`, text: TYPE_LABEL[item.type] }),
               el('span', { class: 'bank-q', text: item.q }),
             ]),
-            el('span', { class: 'bank-meta', text: `${answer !== '' ? `答え: ${answer} · ` : ''}${formatAskedMeta(item)}` }),
+            el('span', { class: 'bank-meta', text: meta }),
           ]),
         ])
       }),
@@ -383,7 +396,8 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
       el('div', { class: 'settings-row' }, [el('span', { text: '形式' }), bankTypeSelect]),
       bankQInput,
       bankFields.row,
-      bankMemoInput,
+      // メモは出題者の手元だけの覚え書きで、問題・答えとは性格が違うので線で離す
+      el('div', { class: 'bank-memo-section' }, [bankMemoInput]),
       formError,
       el('div', { class: 'btn-row' }, [bankAddBtn, bankCancelBtn]),
     ]),

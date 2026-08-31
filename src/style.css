@@ -1648,14 +1648,57 @@ input[type='checkbox']:focus-visible {
 }
 
 /* 絞り込み中だけ、件数と解除の導線を出す */
+/* 件数・絞り込み解除（左）と、一覧の見せ方の切り替え（右） */
 .bank-filter-status {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 6px;
+  margin-top: 8px;
   color: var(--dim);
   font-size: 0.72rem;
+}
+
+.bank-status-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bank-count {
+  white-space: nowrap;
+}
+
+/* 出題状況の表示切り替え。行に情報を足すかどうかなので、一覧の上に置く */
+.bank-detail-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bank-detail-toggle input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+}
+
+.bank-detail-toggle input[type='checkbox']:checked::after {
+  left: 5.5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border-width: 0 2px 2px 0;
+}
+
+/* メモは問題・答えとは別の情報なので、線を1本引いて離す */
+.bank-memo-section {
+  border-top: 1px solid var(--hairline);
+  padding-top: 14px;
+  margin-top: 6px;
 }
 
 /* 見出しは中央、入口は右端に置く（×ボタンと重ならないよう余白を確保） */

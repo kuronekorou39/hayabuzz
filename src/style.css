@@ -1648,10 +1648,10 @@ input[type='checkbox']:focus-visible {
 }
 
 /* 絞り込み中だけ、件数と解除の導線を出す */
-/* 件数・絞り込み解除（左）と、一覧の見せ方の切り替え（右） */
+/* 絞り込み中だけ、件数と解除の導線を出す */
 .bank-filter-status {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 10px;
   margin-top: 8px;
@@ -1659,39 +1659,25 @@ input[type='checkbox']:focus-visible {
   font-size: 0.72rem;
 }
 
-.bank-status-left {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
-
 .bank-count {
   white-space: nowrap;
 }
 
-/* 出題状況の表示切り替え。行に情報を足すかどうかなので、一覧の上に置く */
-.bank-detail-toggle {
+/* 出題状況の表示トグル。記号ひとつで、押されている間は金で示す */
+.bank-detail-btn {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 7px;
-  flex: none;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+  justify-content: center;
+  width: 40px;
+  padding: 0;
+  font-size: 1rem;
+  color: var(--dim);
 }
 
-.bank-detail-toggle input[type='checkbox'] {
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
-}
-
-.bank-detail-toggle input[type='checkbox']:checked::after {
-  left: 5.5px;
-  top: 2px;
-  width: 4px;
-  height: 8px;
-  border-width: 0 2px 2px 0;
+.bank-detail-btn.on {
+  background: rgba(var(--primary-rgb), 0.16);
+  color: var(--primary-text);
 }
 
 /* メモは問題・答えとは別の情報なので、線を1本引いて離す */

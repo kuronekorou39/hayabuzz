@@ -50,9 +50,10 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   await expect(p1.page.locator('.phase-banner')).toContainText('答え：3776m')
 
   await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
-  // 出題状況は既定では出さない。切り替えて初めて回数と正解者が並ぶ
+  // 出題状況は既定では出さない。ⓘ を押して初めて回数と正解者が並ぶ
   await expect(host.page.locator('.bank-row')).not.toContainText('たろう')
-  await host.page.locator('.bank-detail-check').check()
+  await host.page.locator('.bank-detail-btn').click()
+  await expect(host.page.locator('.bank-detail-btn')).toHaveAttribute('aria-pressed', 'true')
   await expect(host.page.locator('.bank-row')).toContainText('たろう')
   await expect(host.page.locator('.bank-row')).toContainText('1回')
   await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
@@ -139,9 +140,8 @@ test('問題集の絞り込み: 形式と文字列で一覧を狭められ、解
   await page.locator('.io-overlay .overlay-close').click()
   const all = SAMPLE_QUESTIONS.length
   await expect(page.locator('.bank-row')).toHaveCount(all)
-  // 絞り込んでいないうちは総数だけ。解除の導線は出さない
-  await expect(page.locator('.bank-count')).toHaveText(`${all}問`)
-  await expect(page.getByRole('button', { name: '絞り込みを解除' })).toBeHidden()
+  // 絞り込んでいないうちは件数表示を出さない
+  await expect(page.locator('.bank-filter-status')).toBeHidden()
 
   // 形式で絞る
   await page.locator('.bank-filter-type').selectOption('ox')
@@ -165,8 +165,7 @@ test('問題集の絞り込み: 形式と文字列で一覧を狭められ、解
   // 解除で全件に戻る
   await page.getByRole('button', { name: '絞り込みを解除' }).click()
   await expect(page.locator('.bank-row')).toHaveCount(all)
-  await expect(page.locator('.bank-count')).toHaveText(`${all}問`)
-  await expect(page.getByRole('button', { name: '絞り込みを解除' })).toBeHidden()
+  await expect(page.locator('.bank-filter-status')).toBeHidden()
 
   await context.close()
 })
@@ -259,9 +258,9 @@ test('4択問題: 問題集に登録して出題すると選択肢が配信さ�
   await host.page.getByRole('button', { name: '正解を発表（3. 47）' }).click()
   await expect(p1.page.locator('.me-summary')).toContainText('1点')
 
-  // 問題集の履歴にも正解者が残る（出題状況を表示にすると出る）
+  // 問題集の履歴にも正解者が残る（ⓘ を押すと出る）
   await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
-  await host.page.locator('.bank-detail-check').check()
+  await host.page.locator('.bank-detail-btn').click()
   await expect(host.page.locator('.bank-row')).toContainText('たろう')
 
   await p1.context.close()

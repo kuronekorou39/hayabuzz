@@ -172,21 +172,29 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
   ])
   filterText.addEventListener('input', () => render())
   filterType.addEventListener('change', () => render())
-  const filterRow = el('div', { class: 'bank-filter' }, [filterText, filterType])
-
-  // 出題回数・日付・正解者は、普段の出題では読まない情報なので既定では出さない
-  const detailCheck = el('input', { class: 'bank-detail-check', type: 'checkbox' })
-  detailCheck.addEventListener('change', () => render())
+  // 出題回数・日付・正解者は普段の出題では読まないので、既定では出さない。
+  // 絞り込みと同じ「一覧の見せ方」なので、形式の隣に記号だけのトグルを置く
+  let showDetail = false
+  const detailBtn = el('button', {
+    class: 'btn bank-detail-btn',
+    title: '出題状況（回数・日付・正解者）を表示',
+    'aria-label': '出題状況を表示',
+    text: 'ⓘ', // 丸囲み。裸の i だと記号ではなく英字に見えてしまう
+    onclick: () => {
+      showDetail = !showDetail
+      render()
+    },
+  })
+  const filterRow = el('div', { class: 'bank-filter' }, [filterText, filterType, detailBtn])
 
   const filterCount = el('span', { class: 'bank-count', text: '' })
-  const filterClearBtn = el('button', { class: 'link-btn', text: '絞り込みを解除', onclick: () => {
-    filterText.value = ''
-    filterType.value = ''
-    render()
-  } })
   const filterStatus = el('div', { class: 'bank-filter-status' }, [
-    el('span', { class: 'bank-status-left' }, [filterCount, filterClearBtn]),
-    el('label', { class: 'bank-detail-toggle' }, [el('span', { text: '出題状況' }), detailCheck]),
+    filterCount,
+    el('button', { class: 'link-btn', text: '絞り込みを解除', onclick: () => {
+      filterText.value = ''
+      filterType.value = ''
+      render()
+    } }),
   ])
 
   const bankRows = el('div', { class: 'bank-rows' })
@@ -327,10 +335,10 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
 
     // 絞り込み欄は問題があるときだけ出す（空の問題集では邪魔になる）
     filterRow.style.display = items.length === 0 ? 'none' : ''
-    filterStatus.style.display = items.length === 0 ? 'none' : ''
-    // 件数と解除の導線は、絞り込んでいるときだけ意味がある
-    filterCount.textContent = filtering ? `${shown.length}問 / 全${items.length}問` : `${items.length}問`
-    filterClearBtn.style.display = filtering ? '' : 'none'
+    filterStatus.style.display = filtering ? '' : 'none'
+    filterCount.textContent = `${shown.length}問 / 全${items.length}問`
+    detailBtn.classList.toggle('on', showDetail)
+    detailBtn.setAttribute('aria-pressed', String(showDetail))
     bankPlaceholder.style.display = items.length === 0 ? '' : 'none'
     bankNoMatch.style.display = items.length > 0 && shown.length === 0 ? '' : 'none'
 
@@ -343,7 +351,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true }) {
         // 答えは常に、出題状況（回数・日付・正解者）は切り替えたときだけ添える
         const meta = [
           answer !== '' ? `答え: ${answer}` : '',
-          detailCheck.checked ? formatAskedMeta(item) : '',
+          showDetail ? formatAskedMeta(item) : '',
         ].filter((part) => part !== '').join(' · ')
         const selected = item.id === selectedId
         return el('button', {

@@ -44,8 +44,14 @@ export function createAnswerFields(prefix) {
     el('option', { value: 'o', text: '正解は ○' }),
     el('option', { value: 'x', text: '正解は ×' }),
   ])
-  const choiceInputs = ['1', '2', '3', '4'].map((n) =>
-    el('input', { class: `input ${prefix}-choice-input`, type: 'text', placeholder: `選択肢${n}`, maxlength: 100 }))
+  const choiceInputs = ['1', '2', '3', '4'].map(() =>
+    el('input', { class: `input ${prefix}-choice-input`, type: 'text', placeholder: '選択肢', maxlength: 100 }))
+  // 値を入れると placeholder が消えるので、何番の選択肢かは常に見えるようにしておく
+  const choiceRows = choiceInputs.map((input, i) =>
+    el('label', { class: 'choice-row' }, [
+      el('span', { class: 'choice-num', text: String(i + 1) }),
+      input,
+    ]))
   const correctSelect = el('select', { class: `input ${prefix}-correct-select` }, [
     el('option', { value: '', text: '正解は未定（発表時に選ぶ）' }),
     ...['1', '2', '3', '4'].map((n) => el('option', { value: n, text: `正解は ${n}` })),
@@ -56,7 +62,7 @@ export function createAnswerFields(prefix) {
     row,
     sync(type) {
       if (type === 'ox') row.replaceChildren(oxSelect)
-      else if (type === 'choice4') row.replaceChildren(...choiceInputs, correctSelect)
+      else if (type === 'choice4') row.replaceChildren(...choiceRows, correctSelect)
       else row.replaceChildren(answerInput)
     },
     // 入力値を { raw: 保存・判定に使う値, choices } で返す

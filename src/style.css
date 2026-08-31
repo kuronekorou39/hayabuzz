@@ -2076,6 +2076,34 @@ input[type='checkbox']:focus-visible {
   gap: 6px;
 }
 
+/* 主役は問題文。答え・メモは一段落として、視線が問題に向くようにする */
+.answer-fields .input,
+.bank-memo-input {
+  font-size: 0.88rem;
+  padding: 10px 12px;
+}
+
+/* 4択の選択肢は、番号を左に固定して並べる */
+.choice-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.choice-num {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--card-2);
+  color: var(--dim);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .bank-file-input {
   display: none;
 }

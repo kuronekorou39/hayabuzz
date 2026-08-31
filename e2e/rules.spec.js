@@ -10,6 +10,7 @@ test('順次表示ルール: 読み上げが流れ、押下で止まり、正解
 
   // ルール: 順次表示・ゆっくり（4文字/秒）
   await host.page.getByRole('button', { name: 'ルール' }).click()
+  await host.page.locator('.rules-overlay .rules-advanced summary').click() // 折りたたみの詳細設定を開く
   await host.page.locator('.settings-row', { hasText: '問題の表示' }).locator('select').selectOption('serial')
   await host.page.locator('.settings-row', { hasText: '読み上げ速度' }).locator('select').selectOption('4')
   await host.page.locator('.rules-overlay').getByRole('button', { name: '閉じる' }).click()
@@ -57,7 +58,8 @@ test('チーム戦: 自動割り当て・他チームへの開放・チーム合
 
   // ルール: 2チーム + 正解は+3点
   await host.page.getByRole('button', { name: 'ルール' }).click()
-  await host.page.locator('.settings-row', { hasText: 'チーム戦' }).locator('select').selectOption('2')
+  await host.page.locator('.rules-overlay .rules-advanced summary').click() // 折りたたみの詳細設定を開く
+  await host.page.locator('.settings-row', { hasText: 'チーム分け' }).locator('select').selectOption('2')
   await host.page.locator('.settings-row', { hasText: '正解の得点' }).locator('select').selectOption('3')
   await host.page.locator('.rules-overlay').getByRole('button', { name: '閉じる' }).click()
 

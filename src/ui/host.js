@@ -469,30 +469,40 @@ export function mountHost(app) {
     revealSpeedRow.style.display = game.rules.reveal === 'serial' ? '' : 'none'
   }
 
-  // よく触る基本項目と、細かい詳細項目（折りたたみ）に分ける
+  const settingsRow = (label, ...controls) =>
+    el('label', { class: 'settings-row' }, [el('span', { text: label }), ...controls])
+
+  // 詳細は項目が多いので、目的ごとにまとめて見出しを付ける（並べるだけだと探せない）
+  const ruleGroup = (title, rows) =>
+    el('section', { class: 'rules-group' }, [el('h3', { class: 'rules-group-title', text: title }), ...rows])
+
+  // 基本は回答形式だけ。ほかは既定のままで1ゲーム成立するので、詳細にしまう
   const rulesOverlay = popupOverlay(
     'rules-overlay',
     el('div', { class: 'card rules-card' }, [
       el('h2', { text: 'ルール設定' }),
-      el('label', { class: 'settings-row' }, [el('span', { text: '回答形式' }), answerModeSelect]),
-      el('label', { class: 'settings-row' }, [el('span', { text: '問題の表示' }), revealSelect]),
-      revealSpeedRow,
-      el('label', { class: 'settings-row' }, [el('span', { text: '正解の得点' }), correctPointsSelect]),
-      el('label', { class: 'settings-row' }, [el('span', { text: '誤答の得点' }), wrongPointsSelect]),
-      el('label', { class: 'settings-row' }, [el('span', { text: 'チーム戦' }), teamsSelect, shuffleBtn]),
+      settingsRow('回答形式', answerModeSelect),
       el('details', { class: 'rules-advanced' }, [
         el('summary', { text: '詳細設定' }),
-        el('label', { class: 'settings-row' }, [el('span', { text: '押下音' }), pressSoundSelect]),
-        el('label', { class: 'settings-row' }, [el('span', { text: '勝ち抜けライン' }), winScoreSelect]),
-        el('label', { class: 'settings-row' }, [el('span', { text: '順位マーク' }), rankBadgesSelect]),
-        el('label', { class: 'settings-row' }, [
-          el('span', { text: '得点を隠す（結果発表で公開）' }),
-          hideScoresCheck,
+        ruleGroup('出題', [
+          settingsRow('問題の表示', revealSelect),
+          revealSpeedRow,
         ]),
-        el('label', { class: 'settings-row' }, [el('span', { text: '同名での復帰（得点引き継ぎ）' }), nickResumeCheck]),
-        el('h2', { text: 'ハンデ（押下時刻に加算するms）' }),
-        handicapPlaceholder,
-        handicapRows,
+        ruleGroup('得点', [
+          settingsRow('正解の得点', correctPointsSelect),
+          settingsRow('誤答の得点', wrongPointsSelect),
+          settingsRow('勝ち抜けライン', winScoreSelect),
+          settingsRow('得点を隠す（結果発表で公開）', hideScoresCheck),
+        ]),
+        ruleGroup('チーム戦', [settingsRow('チーム分け', teamsSelect, shuffleBtn)]),
+        ruleGroup('画面と音', [
+          settingsRow('順位マーク', rankBadgesSelect),
+          settingsRow('押下音', pressSoundSelect),
+        ]),
+        ruleGroup('参加者', [
+          settingsRow('同名での復帰（得点引き継ぎ）', nickResumeCheck),
+        ]),
+        ruleGroup('ハンデ（押下時刻に加算するms）', [handicapPlaceholder, handicapRows]),
       ]),
     ]),
   )

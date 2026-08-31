@@ -445,9 +445,13 @@ button {
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.32);
 }
 
+/* リングは要素の内側に描く。外側に描くと、開閉アニメのための overflow: hidden に
+   左右だけ切り取られて「上下だけ光る」ように見えてしまう。
+   inset の影なら角丸にも沿うし、祖先の切り取りも受けない */
 .input:focus {
-  outline: 2px solid var(--primary);
-  outline-offset: 0;
+  outline: 2px solid transparent; /* 強制ハイコントラスト表示での保険 */
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 2px var(--primary);
 }
 
 textarea.input {

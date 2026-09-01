@@ -174,7 +174,6 @@ export function mountHost(app) {
     ]),
   )
   const stepBar = el('div', { class: 'step-bar' }, stepEls)
-  const stepHint = el('p', { class: 'step-hint', text: '' })
 
   // いまどのステップにいるか（0始まり）
   function currentStep() {
@@ -192,22 +191,6 @@ export function mountHost(app) {
       node.querySelector('.step-label').textContent = labels[i]
       node.className = `step${i === active ? ' active' : ''}${i < active ? ' done' : ''}`
     })
-    // いま何をすればよいかを1行で示す
-    const hints = mass
-      ? [
-          '問題と正解を入力して「全員に出題」を押します',
-          '全員が問題を読んだら「回答受付開始」へ',
-          '全員の回答がそろったら「締め切り」を押します',
-          '「正解を発表」で自動採点されます',
-        ]
-      : [
-          '問題を入力して「全員に出題」を押します（口頭で読むなら空のままでOK）',
-          '全員が問題を読んだら「早押し開始」へ',
-          '誰かが押すまで待ちます（押されると自動で判定へ進みます）',
-          '回答を聞いて「正解」か「誤答」を選びます',
-        ]
-    stepHint.textContent =
-      game.phase === PHASE.FINAL ? '結果発表中です。「ゲームに戻る」で続きから遊べます' : hints[active]
   }
   const currentQuestionEl = el('div', { class: 'question-text question-clamp', text: 'まだ問題がありません' })
   const answerLine = el('p', { class: 'answer-note hidden', text: '' }) // 答え・メモ（出題者の手元のみ）
@@ -624,7 +607,6 @@ export function mountHost(app) {
             bankBtn, // 出題の材料を選ぶ導線なので、控えめに右端へ置く
           ]),
           stepBar,
-          stepHint,
           questionInput,
           askFields.row,
           currentQuestionEl,
@@ -704,8 +686,9 @@ export function mountHost(app) {
     updateCompatButton()
 
     renderSteps()
-    const badgeVisible = game.qid > 0 && game.phase !== PHASE.FINAL
-    hostQBadge.textContent = badgeVisible ? `Q${game.qid}` : ''
+    // まだ1問も出していないうちは、これから出す番号（Q1）を出しておく
+    const badgeVisible = game.phase !== PHASE.FINAL
+    hostQBadge.textContent = badgeVisible ? `Q${Math.max(game.qid, 1)}` : ''
     hostQBadge.classList.toggle('ghost', !badgeVisible)
     renderQuestionText()
     // 読み上げ中はアニメーションのために定期再描画する

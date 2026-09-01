@@ -305,14 +305,6 @@ button {
   color: var(--on-primary);
 }
 
-.step-hint {
-  margin: 0;
-  color: var(--dim);
-  font-size: 0.78rem;
-  line-height: 1.5;
-  text-wrap: balance;
-}
-
 /* 次に押すボタンをそっと脈動させる */
 .btn.next-up {
   animation: next-pulse 1.8s ease-in-out infinite;

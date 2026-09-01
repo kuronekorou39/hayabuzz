@@ -409,7 +409,7 @@ button {
   flex-wrap: wrap;
 }
 
-/* 判定ボタン（正解・誤答系）は2列グリッドで文字割れを防ぐ */
+/* 判定は「正解」「誤答」の2択。文字割れを防ぐため2列グリッドにする */
 .judge-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1230,7 +1230,8 @@ input[type='checkbox']:focus-visible {
   animation: fade-slide 0.35s ease-out;
 }
 
-.order-row {
+/* 出現アニメは新しく現れた行だけ（毎回付けると再描画のたびにチカチカする） */
+.order-row.enter {
   animation: fade-slide 0.25s ease-out;
 }
 
@@ -2285,4 +2286,15 @@ input[type='checkbox']:focus-visible {
   .status > * + * {
     margin-left: 6px;
   }
+}
+
+/* 誤答にしたあとの別の進め方。判定の2択より控えめに、次の行へ置く */
+.wrong-more {
+  display: flex;
+  gap: 8px;
+}
+
+.wrong-more .btn {
+  flex: 1;
+  min-width: 0;
 }

@@ -195,6 +195,10 @@ export function mountHost(app) {
   const currentQuestionEl = el('div', { class: 'question-text question-clamp', text: 'まだ問題がありません' })
   const answerLine = el('p', { class: 'answer-note hidden', text: '' }) // 答え・メモ（出題者の手元のみ）
   const orderList = el('ol', { class: 'order-list' })
+  // 時刻同期の pong ごとに再描画が走るため、毎回すべての行に出現アニメを
+  // 付けると一覧全体がチカチカする。新しく現れた行だけに付ける
+  let shownRowIds = new Set()
+  const orderRowClass = (id) => (shownRowIds.has(id) ? 'order-row' : 'order-row enter')
   const orderPlaceholder = el('p', { class: 'placeholder', text: 'まだ誰も押していません' })
   const resultLine = el('p', { class: 'result-line hidden', text: '' })
   // 問題集の問題の判定結果（正解者・誤答者）を問題集の履歴に書き込む
@@ -215,16 +219,18 @@ export function mountHost(app) {
     game.judgeCorrect()
     recordOutcome()
   } })
-  const wrongNextBtn = el('button', { class: 'btn btn-ng', text: '誤答・次点へ', onclick: () => {
+  // 「誤答」= 誤答にして次に押した人へ回す（早押しの基本の流れ）。
+  // 別の進め方（全員に再開放・他チームへ）は次の行に置く
+  const wrongNextBtn = el('button', { class: 'btn btn-ng', text: '誤答', onclick: () => {
     playWrong()
     game.judgeWrongNext()
     recordOutcome() // 次点がおらず正解者なしで決着した場合の記録
   } })
-  const wrongOpenBtn = el('button', { class: 'btn btn-ng', text: '誤答・全員へ', onclick: () => {
+  const wrongOpenBtn = el('button', { class: 'btn btn-ng btn-small', text: '全員に再開放', onclick: () => {
     playWrong()
     game.judgeWrongReopen()
   } })
-  const wrongTeamBtn = el('button', { class: 'btn btn-ng', text: '誤答・他チームへ', onclick: () => {
+  const wrongTeamBtn = el('button', { class: 'btn btn-ng btn-small', text: '他チームに開放', onclick: () => {
     playWrong()
     game.judgeWrongOpenOtherTeams()
   } })
@@ -594,7 +600,9 @@ export function mountHost(app) {
 
   // 出題と進行は1枚のカードにまとめ、操作ボタンはその時点で押せるものだけを出す
   const actionRow = el('div', { class: 'action-grid' })
-  const judgeRow = el('div', { class: 'judge-row' }, [correctBtn, wrongNextBtn, wrongOpenBtn, wrongTeamBtn])
+  const judgeRow = el('div', { class: 'judge-row' }, [correctBtn, wrongNextBtn])
+  // 誤答にしたあとの進め方。基本は「誤答」で足りるので控えめに置く
+  const wrongMoreRow = el('div', { class: 'wrong-more' }, [wrongOpenBtn, wrongTeamBtn])
 
   function showGame() {
     app.replaceChildren(
@@ -616,6 +624,7 @@ export function mountHost(app) {
           orderList,
           resultLine,
           judgeRow,
+          wrongMoreRow,
           declareRow,
           actionRow,
         ]),
@@ -686,9 +695,11 @@ export function mountHost(app) {
     updateCompatButton()
 
     renderSteps()
-    // まだ1問も出していないうちは、これから出す番号（Q1）を出しておく
+    // バッジはステップ表示と足並みをそろえる。①「問題を用意」の間は、
+    // これから出す番号を出す（1問目の前なら Q1、Q1の判定後なら Q2）
+    const preparing = game.phase === PHASE.WAITING || game.phase === PHASE.RESULT
     const badgeVisible = game.phase !== PHASE.FINAL
-    hostQBadge.textContent = badgeVisible ? `Q${Math.max(game.qid, 1)}` : ''
+    hostQBadge.textContent = badgeVisible ? `Q${preparing ? game.qid + 1 : game.qid}` : ''
     hostQBadge.classList.toggle('ghost', !badgeVisible)
     renderQuestionText()
     // 読み上げ中はアニメーションのために定期再描画する
@@ -704,7 +715,6 @@ export function mountHost(app) {
     // 出題できるのは出題前と判定後だけ。表示中・受付中・判定中に出し直すと
     // 進行中の問題を壊すため、「取り消し」や「受付停止」で戻してから出し直す
     const canAsk = game.phase === PHASE.WAITING || game.phase === PHASE.RESULT
-    showBtn.textContent = game.phase === PHASE.RESULT ? '次の問題を出題' : '全員に出題'
     armBtn.textContent = mass ? '回答受付開始' : '早押し開始'
     finishBtn.textContent = game.phase === PHASE.FINAL ? 'ゲームに戻る' : '結果発表'
 
@@ -751,6 +761,7 @@ export function mountHost(app) {
     // 判定ボタンは誰かが押して判定できるときだけ出す（待機中の画面を静かに保つ）
     const canJudge = !mass && game.phase === PHASE.LOCKED && game.activePlayerId !== null
     judgeRow.style.display = canJudge ? '' : 'none'
+    wrongMoreRow.style.display = canJudge ? '' : 'none'
     wrongTeamBtn.style.display = game.rules.teams > 0 ? '' : 'none'
 
     // チーム合計（チーム戦のみ）
@@ -798,7 +809,7 @@ export function mountHost(app) {
           ...[...game.answers.entries()].map(([playerId, value]) => {
             const player = game.players.get(playerId)
             const isCorrect = game.correctValue !== null && value === game.correctValue
-            return el('li', { class: 'order-row' }, [
+            return el('li', { class: orderRowClass(playerId) }, [
               el('span', { class: 'order-nick', text: player !== undefined ? player.nick : '？' }),
               el('span', { class: 'order-delta', text: answerValueLabel(value) }),
               ...(game.correctValue !== null
@@ -807,8 +818,10 @@ export function mountHost(app) {
             ])
           }),
         )
+        shownRowIds = new Set(game.answers.keys())
       } else {
         orderList.replaceChildren()
+        shownRowIds = new Set()
       }
     } else {
       // 押下順リスト（1位からのms差）。案内文は受付が始まってからにして待機中を静かに保つ
@@ -826,13 +839,14 @@ export function mountHost(app) {
           if (game.excluded.has(entry.playerId)) {
             badges.push(el('span', { class: 'badge ng', text: '誤答' }))
           }
-          return el('li', { class: 'order-row' }, [
+          return el('li', { class: orderRowClass(entry.playerId) }, [
             el('span', { class: 'order-nick', text: player !== undefined ? player.nick : '？' }),
             el('span', { class: 'order-delta', text: `+${entry.deltaMs.toFixed(1)}ms` }),
             ...badges,
           ])
         }),
       )
+      shownRowIds = new Set(game.order.map((entry) => entry.playerId))
     }
 
     // 参加者・得点（手動加減点つき）

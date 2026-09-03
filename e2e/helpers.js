@@ -1,4 +1,4 @@
-﻿import { expect } from '@playwright/test'
+import { expect } from '@playwright/test'
 
 // 出題者として部屋を作る。最初から進行画面+共有ポップアップが開いた状態なので、
 // ポップアップを閉じて進行画面を出す。専用のブラウザコンテキスト（=別端末相当）を割り当てる
@@ -48,12 +48,10 @@ export async function pressBuzzer(page) {
   else await page.locator('.buzzer').click()
 }
 
-// 問題を出して早押し受付を開始する。
-// 出題ボタンのラベルは状況で「全員に出題」「次の問題を出題」と変わるため正規表現で拾う
+// 問題を出す（表示と同時に早押し受付が始まる）。
+// welcome 直後の ping バースト（8回×150ms）でクロックオフセット推定が済むまで待ってから出す
 export async function askAndArm(host, questionText) {
   await host.page.locator('.question-input').fill(questionText)
-  await host.page.getByRole('button', { name: /出題$/ }).click()
-  // welcome 直後の ping バースト（8回×150ms）でクロックオフセット推定が済むのを待つ
   await host.page.waitForTimeout(2500)
-  await host.page.getByRole('button', { name: '早押し開始' }).click()
+  await host.page.getByRole('button', { name: '出題開始' }).click()
 }

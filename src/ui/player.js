@@ -458,7 +458,8 @@ function startGame(app, roomCode, nick) {
   function serialQuestionText(chars) {
     const text = snapshot.questionText
     const count = Math.min(text.length, Math.floor(chars))
-    return count <= 0 ? '（早押し開始で問題文が読み上げられます）' : text.slice(0, count)
+    // 出題と同時に読み上げが始まるので、ここに来るのは受付停止で先頭に戻っている場合だけ
+    return count <= 0 ? '（受付が再開すると読み上げられます）' : text.slice(0, count)
   }
 
   // 問題文エリアは3行ぶんの高さ固定。収まらなければ文字を1段階縮小し、

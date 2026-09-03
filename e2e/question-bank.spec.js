@@ -24,8 +24,9 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   await expect(host.page.locator('.answer-note')).toContainText('メモ: メートル単位で回答')
   await expect(p1.page.locator('.q-badge')).toBeHidden() // まだ出題していない
 
-  // 「問題を表示」で初めて配信される
-  await host.page.getByRole('button', { name: '全員に出題' }).click()
+  // 「出題開始」で初めて配信され、同時に早押し受付が始まる
+  await host.page.waitForTimeout(2200) // 時刻同期（pingバースト）待ち
+  await host.page.getByRole('button', { name: '出題開始' }).click()
   await expect(p1.page.locator('.question-text')).toContainText('富士山の標高は？')
   await expect(p1.page.locator('.q-badge')).toHaveText('Q1')
   // 出題中の問題文は入力欄に残る（編集はできない）
@@ -40,8 +41,6 @@ test('問題集: 追加→出題→答えの手元表示→正解者名の記録
   await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
 
   // 判定まで進めると出題履歴に正解者名が残る
-  await host.page.waitForTimeout(2200)
-  await host.page.getByRole('button', { name: '早押し開始' }).click()
   await expect(p1.page.locator('.buzzer')).toHaveClass(/\barmed\b/)
   await pressBuzzer(p1.page)
   await expect(p1.page.locator('.buzzer-label')).toHaveText('回答してください！')
@@ -264,11 +263,9 @@ test('4択問題: 問題集に登録して出題すると選択肢が配信さ�
   await expect(host.page.locator('.ask-choice-input').nth(2)).toHaveValue('47')
   await expect(host.page.locator('.ask-correct-select')).toHaveValue('3')
 
-  // 出題すると選択肢が回答者に届く
-  await host.page.getByRole('button', { name: '全員に出題' }).click()
+  // 出題すると選択肢が回答者に届き、同時に回答受付が始まる
+  await host.page.getByRole('button', { name: '出題開始' }).click()
   await expect(p1.page.locator('.answer-btn').nth(2)).toContainText('47')
-  await host.page.waitForTimeout(2200)
-  await host.page.getByRole('button', { name: '回答受付開始' }).click()
 
   // 回答 → 締め切り → 正解は問題集から分かっているので1タップで発表できる
   await p1.page.locator('.answer-btn').nth(2).click()
@@ -314,7 +311,8 @@ test('ランダム: いまの形式の未出題から1問を読み込み、出�
   const first = await host.page.locator('.question-input').inputValue()
   expect(['Q1', 'Q2']).toContain(first)
   await expect(host.page.locator('.ask-a-input')).toHaveValue(first.replace('Q', 'A'))
-  await host.page.getByRole('button', { name: '全員に出題' }).click()
+  await host.page.waitForTimeout(2200) // 時刻同期（pingバースト）待ち
+  await host.page.getByRole('button', { name: '出題開始' }).click()
   await expect(p1.page.locator('.question-text')).toContainText(first)
   await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
   await expect(host.page.locator('.bank-row.asked')).toHaveCount(1)
@@ -327,8 +325,6 @@ test('ランダム: いまの形式の未出題から1問を読み込み、出�
   await expect(host.page.locator('.toast.ng', { hasText: '出題中は選べません' })).toBeVisible()
 
   // 判定まで進めてから2問目: 残った1問が選ばれる
-  await host.page.waitForTimeout(2200)
-  await host.page.getByRole('button', { name: '早押し開始' }).click()
   await expect(p1.page.locator('.buzzer')).toHaveClass(/\barmed\b/)
   await pressBuzzer(p1.page)
   await expect(host.page.locator('.badge.active')).toBeVisible()
@@ -336,12 +332,10 @@ test('ランダム: いまの形式の未出題から1問を読み込み、出�
   await host.page.getByRole('button', { name: 'ランダム' }).click()
   const second = first === 'Q1' ? 'Q2' : 'Q1'
   await expect(host.page.locator('.question-input')).toHaveValue(second)
-  await host.page.getByRole('button', { name: '全員に出題' }).click()
+  await host.page.getByRole('button', { name: '出題開始' }).click()
   await expect(p1.page.locator('.question-text')).toContainText(second)
 
   // 早押しの問題を出し尽くしたら知らせる（一覧では2問とも薄い）
-  await host.page.waitForTimeout(2200)
-  await host.page.getByRole('button', { name: '早押し開始' }).click()
   await expect(p1.page.locator('.buzzer')).toHaveClass(/\barmed\b/)
   await pressBuzzer(p1.page)
   await expect(host.page.locator('.badge.active')).toBeVisible()

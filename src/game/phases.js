@@ -1,7 +1,7 @@
 // ゲームフェーズ（遷移は host のみが行う）
 export const PHASE = {
   WAITING: 'waiting', // 待機（問題なし）
-  QUESTION: 'question', // 問題表示中
+  QUESTION: 'question', // 問題は出ているが受付停止中（出題は受付と同時に始まるので、停止後だけの状態）
   ARMED: 'armed', // 早押し受付中
   LOCKED: 'locked', // 誰かが押した（判定待ち）/ 一斉回答の締め切り後
   RESULT: 'result', // 判定結果表示（次の問題待ち）
@@ -10,7 +10,7 @@ export const PHASE = {
 
 export const PHASE_LABEL = {
   [PHASE.WAITING]: '出題待ち',
-  [PHASE.QUESTION]: '問題表示中',
+  [PHASE.QUESTION]: '受付停止中', // 出題と同時に受付が始まるため、この状態は「受付停止」の後だけ
   [PHASE.ARMED]: '早押し受付中！',
   [PHASE.LOCKED]: '回答中…',
   [PHASE.RESULT]: '判定結果',

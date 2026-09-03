@@ -83,3 +83,42 @@ describe('問題集との紐付け', () => {
     game.destroy()
   })
 })
+
+describe('出題と受付の開始', () => {
+  test('startQuestion は表示と同時に受付を始め、配信は1回にまとめる', () => {
+    const sent = []
+    const game = new HostGame({ send: (msg) => sent.push(msg), now: () => 0 })
+    game.setAnswerMode('ox')
+    sent.length = 0
+    game.startQuestion({ text: '○×問題', plannedCorrect: 'o' })
+    expect(game.phase).toBe(PHASE.ARMED)
+    expect(game.armedAt).toBe(0)
+    expect(sent.filter((m) => m.type === MSG.STATE)).toHaveLength(1)
+    expect(game.askedLog).toHaveLength(1)
+  })
+
+  test('受付中でもまだ誰も押していなければ取り消して出題前に戻せる（回答は捨てる）', () => {
+    const game = makeGame()
+    join(game, 'S1aaaaaaaaaaaaaa', 'たろう', 'p1')
+    game.setAnswerMode('ox')
+    game.startQuestion({ text: '○×問題' })
+    game.handleMessage({ type: MSG.ANSWER, qid: 1, value: 'o' }, 'p1')
+    expect(game.answers.size).toBe(1)
+    game.cancelQuestion()
+    expect(game.phase).toBe(PHASE.WAITING)
+    expect(game.qid).toBe(0)
+    expect(game.armedAt).toBeNull()
+    expect(game.answers.size).toBe(0)
+    expect(game.askedLog).toHaveLength(0)
+    game.destroy()
+  })
+
+  test('判定待ち（誰かが押した後）は取り消せない', () => {
+    const game = makeGame()
+    game.startQuestion({ text: '問題' })
+    game.phase = PHASE.LOCKED
+    game.cancelQuestion()
+    expect(game.phase).toBe(PHASE.LOCKED)
+    expect(game.qid).toBe(1)
+  })
+})

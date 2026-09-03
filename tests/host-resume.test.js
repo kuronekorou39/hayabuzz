@@ -67,7 +67,7 @@ describe('出題者の復帰（serialize / restore）', () => {
     restored.destroy()
   })
 
-  test('早押しの判定待ちは問題表示中に戻る（誤答者の除外は残す）', () => {
+  test('早押しの判定待ちは受付停止の状態に戻る（誤答者の除外は残す）', () => {
     const game = makeGame()
     join(game, S1, 'たろう', 'p1')
     join(game, S2, 'はなこ', 'p2')
@@ -88,7 +88,7 @@ describe('出題者の復帰（serialize / restore）', () => {
     game.destroy()
   })
 
-  test('一斉回答: 受付中は回答を捨てて問題表示中に戻り、締め切り後は回答を保ったまま発表できる', () => {
+  test('一斉回答: 受付中は回答を捨てて受付停止の状態に戻り、締め切り後は回答を保ったまま発表できる', () => {
     const game = makeGame()
     join(game, S1, 'たろう', 'p1')
     game.setAnswerMode('ox')

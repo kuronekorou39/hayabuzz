@@ -30,7 +30,7 @@ export class HostGame {
     this.rules = {
       pressSound: 'winner', // 押下音: 'winner'=回答権を得た人だけ / 'all'=押した全員
       nickResume: true, // 切断中の同名プレイヤーへの復帰（得点引き継ぎ）を許可するか
-      reveal: 'all', // 問題文の表示: 'all'=一括 / 'serial'=読み上げ（早押し開始で流れる）
+      reveal: 'all', // 問題文の表示: 'all'=一括 / 'serial'=読み上げ（出題開始と同時に流れる）
       revealCps: 7, // 読み上げ速度（文字/秒）
       correctPoints: 1, // 正解の得点
       wrongPoints: 0, // 誤答の得点（0以下のペナルティ）
@@ -210,13 +210,27 @@ export class HostGame {
     return entry !== undefined && entry.qid === this.qid ? entry : null
   }
 
-  // 新しい問題を表示する（RESULT からの「次の問題」もこの操作）
+  // 新しい問題を表示する（受付はまだ始めない。arm() で始める）
   //   text         : 問題文（空なら口頭で出題）
   //   answer       : 表示用の答え（判定結果で全員に配信。空なら出さない）
   //   choices      : 4択の選択肢（全員に配信）
   //   plannedCorrect: 一斉回答の正解値（'o'|'x'|'1'〜'4'）。分かっていればワンタップで発表できる
   //   bankId       : 問題集の問題の id（履歴に残し、この部屋で出題済みかの判定に使う）
-  showQuestion({ text = '', answer = '', choices = [], plannedCorrect = null, bankId = null } = {}) {
+  showQuestion(opts = {}) {
+    this.#prepareQuestion(opts)
+    this.#changed()
+  }
+
+  // 新しい問題を表示し、同時に受付（早押し／一斉回答）を始める。出題者の通常の操作はこちら
+  // （実際の早押しクイズと同じく、読み上げ開始と同時にボタンが有効）。順次表示ルールでは
+  // 問題文もここから流れ始める。配信は1回にまとめ、回答者に「表示中」を一瞬見せない
+  startQuestion(opts = {}) {
+    this.#prepareQuestion(opts)
+    this.#armCore()
+    this.#changed()
+  }
+
+  #prepareQuestion({ text = '', answer = '', choices = [], plannedCorrect = null, bankId = null } = {}) {
     this.questionText = text.trim().slice(0, CONFIG.questionMaxLen)
     this.answerText = answer.trim().slice(0, 200)
     this.choices = choices.slice(0, 4).map((c) => String(c).slice(0, 100))
@@ -234,13 +248,13 @@ export class HostGame {
     this.correctValue = null
     this.askedLog.push({ qid: this.qid, text: this.questionText, answer: this.answerText, bankId, winners: [], wrongs: [], decided: false })
     if (this.askedLog.length > 200) this.askedLog.shift()
-    this.#changed()
   }
 
-  // 表示した問題を引っ込めて出題前に戻す（誤って表示したときの取り消し）。
+  // 出した問題を引っ込めて出題前に戻す（誤って出したときの取り消し）。
+  // 受付停止中のほか、受付中でもまだ誰も押していなければ戻せる（一斉回答の回答は捨てる）。
   // 問題番号と履歴も巻き戻すので、次の出題は同じ番号から始まる
   cancelQuestion() {
-    if (this.phase !== PHASE.QUESTION) return
+    if (this.phase !== PHASE.QUESTION && this.phase !== PHASE.ARMED) return
     if (this.#logEntry() !== null) this.askedLog.pop()
     this.qid -= 1
     this.questionText = ''
@@ -248,20 +262,29 @@ export class HostGame {
     this.choices = []
     this.plannedCorrect = null
     this.revealBase = 0
+    this.armedAt = null
+    this.presses = []
+    this.order = []
+    this.activePlayerId = null
+    this.answers.clear()
     this.phase = PHASE.WAITING
     this.#changed()
   }
 
-  // 早押し受付を開始。armedAt（host 時刻）が state に載り、これより前の押下は無効。
-  // 順次表示ルールでは読み上げもここから（revealBase の続きから）流れる
+  // 受付を再開する（「受付停止」からの仕切り直し）。armedAt（host 時刻）が state に載り、
+  // これより前の押下は無効。順次表示ルールでは読み上げも続き（revealBase）から流れる
   arm() {
     if (this.phase !== PHASE.QUESTION) return
+    this.#armCore()
+    this.#changed()
+  }
+
+  #armCore() {
     this.armedAt = this.now()
     this.presses = []
     this.order = []
     this.activePlayerId = null
     this.phase = PHASE.ARMED
-    this.#changed()
   }
 
   // 一斉回答の締め切り（○×・4択）。以後の回答変更を受け付けない
@@ -574,7 +597,7 @@ export class HostGame {
 
   // serialize() の内容から復元する。参加者は全員「切断中」として戻し、
   // 再接続（hello）で得点ごと引き継ぐ。早押しの受付中・判定待ちは時計が変わって
-  // 押下時刻を比べられないため、受付停止と同じく問題表示中に戻す
+  // 押下時刻を比べられないため、受付停止の状態に戻す（「受付を再開」で続けられる）
   // （一斉回答の締め切り後は回答が出そろっているので、そのまま発表できる）
   restore(saved) {
     this.destroy()

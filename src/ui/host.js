@@ -159,7 +159,9 @@ export function mountHost(app, { saved = null } = {}) {
   // 答え・選択肢の入力（回答形式に合わせて中身が変わる）
   const askFields = createAnswerFields('ask')
 
-  const showBtn = el('button', { class: 'btn btn-primary', text: '全員に出題', onclick: () => {
+  // 出題と同時に受付（早押し／一斉回答）が始まる。「表示してから別に開始」の段階は置かない
+  // （実際の早押しクイズと同じく読み上げ開始と同時にボタンが有効。仕切り直しは「受付停止」）
+  const showBtn = el('button', { class: 'btn btn-primary', text: '出題開始', onclick: () => {
     const type = game.rules.answerMode
     const { raw, choices } = askFields.read(type)
     // 問題集から読み込んだ問題なら、実際に出したこの時点で出題履歴を積む
@@ -168,7 +170,7 @@ export function mountHost(app, { saved = null } = {}) {
       markAsked(bankItems, currentBankId, Date.now())
       saveBank(bankItems)
     }
-    game.showQuestion({
+    game.startQuestion({
       text: questionInput.value,
       answer: answerLabel(type, raw, choices),
       choices,
@@ -180,17 +182,18 @@ export function mountHost(app, { saved = null } = {}) {
   questionInput.addEventListener('input', () => {
     currentBankId = null
   })
-  // 誤って表示したときの取り消し（出題前に戻して問題文を編集できるようにする）
+  // 誤って出したときの取り消し（出題前に戻して問題文を編集できるようにする。誰かが押す前まで）
   const cancelBtn = el('button', { class: 'btn', text: '取り消し', onclick: () => game.cancelQuestion() })
-  const armBtn = el('button', { class: 'btn btn-arm', text: '早押し開始', onclick: () => game.arm() })
+  // 「受付停止」で仕切り直したあとの再開（順次表示なら読み上げも続きから）
+  const armBtn = el('button', { class: 'btn btn-arm', text: '受付を再開', onclick: () => game.arm() })
   const stopBtn = el('button', { class: 'btn', text: '受付停止', onclick: () => game.stop() })
   const closeAnswersBtn = el('button', { class: 'btn', text: '締め切り', onclick: () => game.closeAnswers() })
 
   const hostQBadge = el('span', { class: 'q-badge ghost', text: '' })
 
   // --- 進行のステップ表示（初見でも次に何をすればよいか分かるように） ---
-  const STEPS = ['問題を用意', '全員に出題', '早押し受付', '判定']
-  const MASS_STEPS = ['問題を用意', '全員に出題', '回答を受付', '正解を発表']
+  const STEPS = ['問題を用意', '出題・早押し', '判定']
+  const MASS_STEPS = ['問題を用意', '出題・回答受付', '正解を発表']
   const stepEls = STEPS.map((_, i) =>
     el('span', { class: 'step', 'data-step': String(i) }, [
       el('span', { class: 'step-num', text: String(i + 1) }),
@@ -201,9 +204,8 @@ export function mountHost(app, { saved = null } = {}) {
 
   // いまどのステップにいるか（0始まり）
   function currentStep() {
-    if (game.phase === PHASE.QUESTION) return 1
-    if (game.phase === PHASE.ARMED) return 2
-    if (game.phase === PHASE.LOCKED) return 3
+    if (game.phase === PHASE.QUESTION || game.phase === PHASE.ARMED) return 1 // 受付停止中も出題の段階
+    if (game.phase === PHASE.LOCKED) return 2
     return 0 // 出題前・判定後・結果発表中は「次の問題を用意する」段階
   }
 
@@ -736,7 +738,7 @@ export function mountHost(app, { saved = null } = {}) {
       }
       const count = Math.min(game.questionText.length, Math.floor(chars))
       currentQuestionEl.textContent =
-        count <= 0 ? '（早押し開始で読み上げ）' : game.questionText.slice(0, count)
+        count <= 0 ? '（受付を再開すると読み上げ）' : game.questionText.slice(0, count)
     } else {
       currentQuestionEl.textContent = game.questionText
     }
@@ -778,15 +780,16 @@ export function mountHost(app, { saved = null } = {}) {
     // 出題できるのは出題前と判定後だけ。表示中・受付中・判定中に出し直すと
     // 進行中の問題を壊すため、「取り消し」や「受付停止」で戻してから出し直す
     const canAsk = game.phase === PHASE.WAITING || game.phase === PHASE.RESULT
-    armBtn.textContent = mass ? '回答受付開始' : '早押し開始'
     finishBtn.textContent = game.phase === PHASE.FINAL ? 'ゲームに戻る' : '結果発表'
 
-    // その時点で押せるボタンだけを並べる（非活性のボタンは並べない）
+    // その時点で押せるボタンだけを並べる（非活性のボタンは並べない）。
+    // 取り消しは誰かが押す前（受付停止中・受付中）まで
     const actions = []
     if (canAsk) actions.push(showBtn)
     if (game.phase === PHASE.QUESTION) actions.push(armBtn, cancelBtn)
-    if (mass && game.phase === PHASE.ARMED) actions.push(closeAnswersBtn)
-    if (!mass && (game.phase === PHASE.ARMED || game.phase === PHASE.LOCKED)) actions.push(stopBtn)
+    if (mass && game.phase === PHASE.ARMED) actions.push(closeAnswersBtn, cancelBtn)
+    if (!mass && game.phase === PHASE.ARMED) actions.push(stopBtn, cancelBtn)
+    if (!mass && game.phase === PHASE.LOCKED) actions.push(stopBtn)
     actionRow.replaceChildren(...actions)
     actionRow.style.display = actions.length === 0 ? 'none' : ''
     // 「次にこれを押す」1つだけを脈動させて迷わせない（判定は人の判断なので強調しない）

@@ -12,10 +12,9 @@ test('○×クイズ: 一斉回答→締め切り→正答発表で自動採点�
   await host.page.locator('.settings-row', { hasText: '回答形式' }).locator('select').selectOption('ox')
   await host.page.locator('.rules-overlay').getByRole('button', { name: '閉じる' }).click()
 
-  // 出題 → 回答受付開始
+  // 出題（表示と同時に回答受付が始まる）
   await host.page.locator('.question-input').fill('富士山は世界一高い山である。○か×か')
-  await host.page.getByRole('button', { name: '全員に出題' }).click()
-  await host.page.getByRole('button', { name: '回答受付開始' }).click()
+  await host.page.getByRole('button', { name: '出題開始' }).click()
 
   // 各自がタップで回答（締切まで変更可）。host には人数だけ見える
   await expect(p1.page.getByRole('button', { name: '○' })).toBeEnabled()
@@ -52,8 +51,7 @@ test('出題時に正解を入力しておくと、締め切り後にワンタ�
   // 問題文と一緒に正解（○）も入力して出題する
   await host.page.locator('.question-input').fill('富士山は日本一高い山である。○か×か')
   await host.page.locator('.ask-ox-select').selectOption('o')
-  await host.page.getByRole('button', { name: '全員に出題' }).click()
-  await host.page.getByRole('button', { name: '回答受付開始' }).click()
+  await host.page.getByRole('button', { name: '出題開始' }).click()
 
   await p1.page.getByRole('button', { name: '○' }).click()
   await host.page.getByRole('button', { name: '締め切り' }).click()

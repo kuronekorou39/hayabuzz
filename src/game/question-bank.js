@@ -97,7 +97,8 @@ export function importTsv(items, text, type = 'buzzer') {
   for (const line of text.split('\n')) {
     const cells = line.split('\t').map((c) => c.trim())
     const q = cells[0] ?? ''
-    if (q === '') continue
+    // 空行と、AI の出力をコードブロックごと貼ったときの記号行（```）は読み飛ばす
+    if (q === '' || q.startsWith('```')) continue
     let spec
     if (type === 'choice4') {
       const correct = cells[5] ?? ''

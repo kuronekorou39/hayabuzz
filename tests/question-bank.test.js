@@ -193,3 +193,11 @@ describe('ランダムに選ぶ', () => {
     expect(pickRandomQuestion([], {})).toBeNull()
   })
 })
+
+describe('AI の出力の貼り付け', () => {
+  test('コードブロックの記号行・空行・行末の CR は無視する', () => {
+    const items = []
+    expect(importTsv(items, '```\r\n問題A\t答えA\r\n\r\n問題B\t答えB\r\n```', 'buzzer')).toEqual({ added: 2, skipped: 0 })
+    expect(items.map((i) => [i.q, i.a])).toEqual([['問題A', '答えA'], ['問題B', '答えB']])
+  })
+})

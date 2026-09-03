@@ -26,6 +26,7 @@ export class HostGame {
     this.excluded = new Set()
     this.activePlayerId = null
     this.result = null // { playerId, correct } | null
+    this.lastWrongPlayerId = null // 直近の誤答者（「他チームに開放」で除外するチームの判定に使う）
     // 部屋のルール（host が変更し、state で全員に配信される）
     this.rules = {
       pressSound: 'winner', // 押下音: 'winner'=回答権を得た人だけ / 'all'=押した全員
@@ -236,16 +237,8 @@ export class HostGame {
     this.choices = choices.slice(0, 4).map((c) => String(c).slice(0, 100))
     this.plannedCorrect = this.#isValidAnswer(plannedCorrect) ? plannedCorrect : null
     this.qid += 1
+    this.#resetProgress()
     this.phase = PHASE.QUESTION
-    this.armedAt = null
-    this.presses = []
-    this.order = []
-    this.excluded.clear()
-    this.activePlayerId = null
-    this.result = null
-    this.revealBase = 0 // 読み上げは新しい問題の先頭から
-    this.answers.clear()
-    this.correctValue = null
     this.askedLog.push({ qid: this.qid, text: this.questionText, answer: this.answerText, bankId, winners: [], wrongs: [], decided: false })
     if (this.askedLog.length > 200) this.askedLog.shift()
   }
@@ -257,18 +250,42 @@ export class HostGame {
     if (this.phase !== PHASE.QUESTION && this.phase !== PHASE.ARMED) return
     if (this.#logEntry() !== null) this.askedLog.pop()
     this.qid -= 1
+    this.#clearQuestion()
+    this.phase = PHASE.WAITING
+    this.#changed()
+  }
+
+  // 判定結果を閉じて次の出題に備える（問題文・押下順・結果を消して出題前に戻る）。
+  // 判定の直後に自動で進めないのは、正解・誤答はあくまで回答への応答で、
+  // 結果を見せておく時間は出題者が決めるため
+  nextQuestion() {
+    if (this.phase !== PHASE.RESULT) return
+    this.#clearQuestion()
+    this.phase = PHASE.WAITING
+    this.#changed()
+  }
+
+  // 問題に関する状態をすべて出題前に戻す（問題番号と履歴は触らない）
+  #clearQuestion() {
     this.questionText = ''
     this.answerText = ''
     this.choices = []
     this.plannedCorrect = null
-    this.revealBase = 0
+    this.#resetProgress()
+  }
+
+  // 進行中の押下・判定・回答をリセットする（問題文は残す）
+  #resetProgress() {
     this.armedAt = null
     this.presses = []
     this.order = []
+    this.excluded.clear()
     this.activePlayerId = null
+    this.result = null
+    this.revealBase = 0 // 読み上げは先頭から
     this.answers.clear()
-    this.phase = PHASE.WAITING
-    this.#changed()
+    this.correctValue = null
+    this.lastWrongPlayerId = null
   }
 
   // 受付を再開する（「受付停止」からの仕切り直し）。armedAt（host 時刻）が state に載り、
@@ -351,41 +368,59 @@ export class HostGame {
     if (log !== null && !log.wrongs.includes(player.nick)) log.wrongs.push(player.nick)
   }
 
-  // 不正解: 次点者に権利を回す
-  judgeWrongNext() {
+  // 誤答。ペナルティを付けて回答権を外すだけで、その後の進め方
+  // （次点へ／再開放／他チームへ／正解者なし）は出題者が別に選ぶ
+  judgeWrong() {
     if (this.phase !== PHASE.LOCKED || this.activePlayerId === null) return
     this.#applyWrongPenalty(this.activePlayerId)
     this.excluded.add(this.activePlayerId)
-    const next = pickActive(this.order, this.excluded)
-    if (next !== null) {
-      this.activePlayerId = next
-    } else {
-      // 次点がいない: 正解者なしで結果表示へ
-      this.result = { playerId: null, correct: false }
-      const log = this.#logEntry()
-      if (log !== null) log.decided = true
-      this.activePlayerId = null
-      this.phase = PHASE.RESULT
-      this.revealBase = this.questionText.length // 決着したので問題文を全文表示する
-    }
+    this.lastWrongPlayerId = this.activePlayerId
+    this.activePlayerId = null
     this.#changed()
   }
 
-  // 不正解: 全員に再開放（誤答者は除外）
-  judgeWrongReopen() {
-    if (this.phase !== PHASE.LOCKED || this.activePlayerId === null) return
-    this.#applyWrongPenalty(this.activePlayerId)
-    this.excluded.add(this.activePlayerId)
+  // 誤答のあとに次点へ回せる player（いなければ null）
+  get nextCandidateId() {
+    return pickActive(this.order, this.excluded)
+  }
+
+  // 誤答のあと、進め方を選べる状態か（早押しで、回答権を持つ人がいない判定待ち）
+  get isChoosingAfterWrong() {
+    return !this.isMassAnswerMode && this.phase === PHASE.LOCKED && this.activePlayerId === null
+  }
+
+  // 誤答のあと: 次点者に回答権を回す
+  passToNext() {
+    if (!this.isChoosingAfterWrong) return
+    const next = this.nextCandidateId
+    if (next === null) return
+    this.activePlayerId = next
+    this.#changed()
+  }
+
+  // 誤答のあと: 正解者なしで決着させる
+  endNoWinner() {
+    if (!this.isChoosingAfterWrong) return
+    this.result = { playerId: null, correct: false }
+    const log = this.#logEntry()
+    if (log !== null) log.decided = true
+    this.phase = PHASE.RESULT
+    this.revealBase = this.questionText.length // 決着したので問題文を全文表示する
+    this.#changed()
+  }
+
+  // 誤答のあと: 全員に再開放（誤答者は除外）。fromStart なら読み上げを先頭からやり直す
+  reopenAll({ fromStart = false } = {}) {
+    if (!this.isChoosingAfterWrong) return
+    if (fromStart) this.revealBase = 0
     this.#reopen()
   }
 
-  // 不正解: 誤答者のチーム全員を除外して他チームに開放（チーム戦のみ）
-  judgeWrongOpenOtherTeams() {
-    if (this.phase !== PHASE.LOCKED || this.activePlayerId === null) return
-    if (this.rules.teams === 0) return
-    const wrongPlayer = this.players.get(this.activePlayerId)
-    if (!wrongPlayer) return
-    this.#applyWrongPenalty(this.activePlayerId)
+  // 誤答のあと: 誤答者のチーム全員を除外して他チームに開放（チーム戦のみ）
+  openOtherTeams() {
+    if (!this.isChoosingAfterWrong || this.rules.teams === 0) return
+    const wrongPlayer = this.lastWrongPlayerId !== null ? this.players.get(this.lastWrongPlayerId) : undefined
+    if (wrongPlayer === undefined) return
     for (const player of this.players.values()) {
       if (player.team === wrongPlayer.team) this.excluded.add(player.sessionId)
     }
@@ -409,15 +444,20 @@ export class HostGame {
     this.#changed()
   }
 
+  // 結果発表から戻る。途中だった問題は引っ込めて出題前から
   resumeGame() {
     if (this.phase !== PHASE.FINAL) return
+    this.#clearQuestion()
     this.phase = PHASE.WAITING
     this.#changed()
   }
 
   resetScores() {
     for (const player of this.players.values()) player.score = 0
-    if (this.phase === PHASE.FINAL) this.phase = PHASE.WAITING
+    if (this.phase === PHASE.FINAL) {
+      this.#clearQuestion()
+      this.phase = PHASE.WAITING
+    }
     this.#changed()
   }
 

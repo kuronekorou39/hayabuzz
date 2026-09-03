@@ -22,7 +22,8 @@ describe('出題履歴（askedLog）', () => {
     game.phase = PHASE.LOCKED
     game.order = [{ playerId: id1, deltaMs: 0 }, { playerId: id2, deltaMs: 10 }]
     game.activePlayerId = id1
-    game.judgeWrongNext() // たろう誤答 → はなこに回答権
+    game.judgeWrong() // たろう誤答
+    game.passToNext() // はなこに回答権
     game.judgeCorrect() // はなこ正解
 
     const entry = game.askedLog[0]
@@ -42,7 +43,8 @@ describe('出題履歴（askedLog）', () => {
     game.phase = PHASE.LOCKED
     game.order = [{ playerId: id1, deltaMs: 0 }]
     game.activePlayerId = id1
-    game.judgeWrongNext()
+    game.judgeWrong()
+    game.endNoWinner()
 
     const entry = game.askedLog[0]
     expect(entry.winners).toEqual([])

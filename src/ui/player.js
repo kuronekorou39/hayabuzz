@@ -532,10 +532,14 @@ function startGame(app, roomCode, nick) {
     if (snapshot === null) return
     const mass = snapshot.rules.answerMode !== 'buzzer'
     // 判定結果では（答えが設定されていれば）フェーズ名の代わりに答えを表示する
+    // 早押しで誤答の直後（回答権を持つ人がいない判定待ち）は、出題者が進め方を選んでいる
+    const judging = !mass && snapshot.phase === PHASE.LOCKED && snapshot.activePlayerId === null
     phaseEl.textContent =
       snapshot.phase === PHASE.RESULT && snapshot.answerText !== null
         ? `答え：${snapshot.answerText}`
-        : ((mass ? MASS_PHASE_LABEL[snapshot.phase] : undefined) ?? PHASE_LABEL[snapshot.phase])
+        : judging
+          ? '判定中…'
+          : ((mass ? MASS_PHASE_LABEL[snapshot.phase] : undefined) ?? PHASE_LABEL[snapshot.phase])
     phaseEl.className = `phase-banner phase-${snapshot.phase}`
     // Q番号バッジ（出題前後は visibility だけ消して高さを保つ）
     const badgeVisible = snapshot.phase !== PHASE.WAITING && snapshot.phase !== PHASE.FINAL
@@ -645,7 +649,7 @@ function startGame(app, roomCode, nick) {
       } else {
         stateClasses.push(hasPressed() ? 'pressed' : 'dim')
         const active = snapshot.players.find((p) => p.playerId === snapshot.activePlayerId)
-        buzzerLabel.textContent = active !== undefined ? `${active.nick}さんが回答中` : '回答待ち'
+        buzzerLabel.textContent = active !== undefined ? `${active.nick}さんが回答中` : '判定中…'
       }
     } else if (snapshot.phase === PHASE.QUESTION) {
       stateClasses.push('dim')

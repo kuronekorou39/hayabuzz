@@ -49,8 +49,11 @@ export async function pressBuzzer(page) {
 }
 
 // 問題を出す（表示と同時に早押し受付が始まる）。
+// 前の問題の判定結果が出たままなら「次の問題へ」で閉じてから入力する。
 // welcome 直後の ping バースト（8回×150ms）でクロックオフセット推定が済むまで待ってから出す
 export async function askAndArm(host, questionText) {
+  const next = host.page.getByRole('button', { name: '次の問題へ' })
+  if ((await next.count()) > 0) await next.click()
   await host.page.locator('.question-input').fill(questionText)
   await host.page.waitForTimeout(2500)
   await host.page.getByRole('button', { name: '出題開始' }).click()

@@ -329,6 +329,7 @@ test('ランダム: いまの形式の未出題から1問を読み込み、出�
   await pressBuzzer(p1.page)
   await expect(host.page.locator('.badge.active')).toBeVisible()
   await host.page.getByRole('button', { name: '正解', exact: true }).click()
+  await host.page.getByRole('button', { name: '次の問題へ' }).click()
   await host.page.getByRole('button', { name: 'ランダム' }).click()
   const second = first === 'Q1' ? 'Q2' : 'Q1'
   await expect(host.page.locator('.question-input')).toHaveValue(second)
@@ -340,6 +341,7 @@ test('ランダム: いまの形式の未出題から1問を読み込み、出�
   await pressBuzzer(p1.page)
   await expect(host.page.locator('.badge.active')).toBeVisible()
   await host.page.getByRole('button', { name: '正解', exact: true }).click()
+  await host.page.getByRole('button', { name: '次の問題へ' }).click()
   await host.page.getByRole('button', { name: 'ランダム' }).click()
   await expect(host.page.locator('.toast.ng', { hasText: '早押しの問題はすべて出題済みです' })).toBeVisible()
   await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()

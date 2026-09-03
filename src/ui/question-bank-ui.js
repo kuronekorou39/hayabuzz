@@ -31,6 +31,9 @@ export function answerLabel(type, a, choices = []) {
   return a
 }
 
+// 問題集から出題できないとき（出題中・判定結果の表示中）の案内。一覧と「ランダム」で共用
+export const ASK_BLOCKED_NOTE = '出題中は選べません（「次の問題へ」まで進めるか、取り消してください）'
+
 // 形式（早押し/○×/4択）に応じて中身が変わる答えの入力欄。
 // 出題カードと問題集の追加フォームで同じ部品を使う
 export function createAnswerFields(prefix) {
@@ -235,7 +238,7 @@ export function createBankPanel({
   const bankRows = el('div', { class: 'bank-rows' })
   const bankPlaceholder = el('p', { class: 'placeholder', text: 'まだ問題がありません。下の「問題を追加」か、まとめて貼り付けて入れられます' })
   const bankNoMatch = el('p', { class: 'placeholder', text: '見つかりませんでした' })
-  const bankNote = el('p', { class: 'placeholder', text: '出題中は選べません（判定を終えるか、取り消してください）' })
+  const bankNote = el('p', { class: 'placeholder', text: ASK_BLOCKED_NOTE })
 
   // プレースホルダは実際のタブ区切りの記入例（説明より見た方が早い）。中身は形式で切り替える
   const bankPaste = el('textarea', { class: 'input bank-paste', rows: '3' })

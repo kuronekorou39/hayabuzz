@@ -2344,12 +2344,9 @@ input[type='checkbox']:focus-visible {
 }
 
 /* 誤答にしたあとの別の進め方。判定の2択より控えめに、次の行へ置く */
-.wrong-more {
+/* 誤答のあとの進め方（見出し + ボタンの格子） */
+.after-wrong {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-}
-
-.wrong-more .btn {
-  flex: 1;
-  min-width: 0;
 }

@@ -36,6 +36,17 @@ test('基本フロー: 参加→出題→早押し→正解→再接続→部屋
   await expect(p1.page.locator('.toast.ok', { hasText: '正解！ +1点' })).toBeVisible()
   await expect(p1.page.locator('.me-summary')).toContainText('1点')
 
+  // 判定結果は「次の問題へ」を押すまで残る（入力欄は隠れ、問題・答え・押下順・結果が見える）
+  await expect(host.page.locator('.question-input')).toBeHidden()
+  await expect(host.page.locator('.result-line')).toContainText('正解: たろう')
+  await expect(host.page.locator('.order-row', { hasText: 'たろう' })).toBeVisible()
+  await expect(host.page.locator('.card-title .q-badge')).toHaveText('Q1')
+  await host.page.getByRole('button', { name: '次の問題へ' }).click()
+  await expect(host.page.locator('.question-input')).toBeVisible()
+  await expect(host.page.locator('.question-input')).toHaveValue('')
+  await expect(host.page.locator('.order-row')).toHaveCount(0)
+  await expect(host.page.locator('.card-title .q-badge')).toHaveText('Q2')
+
   // 一時切断→再接続（リロード）で同一セッションIDにより得点を引き継ぐ。
   // 接続中のリロードには確認ダイアログ（leave-guard）が出るので受諾して進める
   p1.page.on('dialog', (dialog) => dialog.accept())
@@ -73,7 +84,7 @@ test('出題者がリロードしても同じ部屋に復帰でき、回答者�
   await host.page.reload()
   await expect(host.page.locator('.toast.ok', { hasText: '前の部屋に戻りました' })).toBeVisible()
   await expect(host.page.locator('.share-overlay')).toBeHidden() // 復帰では共有ポップアップを開かない
-  await expect(host.page.locator('.card-title .q-badge')).toHaveText('Q2') // 問題番号も続きから
+  await expect(host.page.locator('.card-title .q-badge')).toHaveText('Q1') // 判定結果の表示中のまま復帰する
   // 回答者は出題者の戻りを待つ表示になり、戻ると自動でつながり直して得点も残っている
   await expect(p1.page.locator('.conn-overlay')).toContainText('出題者との接続が切れました', { timeout: 30_000 })
   await expect(p1.page.locator('.conn-overlay')).toBeHidden({ timeout: 60_000 })

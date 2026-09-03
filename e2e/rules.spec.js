@@ -70,6 +70,7 @@ test('チーム戦: 自動割り当て・他チームへの開放・チーム合
   await expect(p1.page.locator('.buzzer')).toHaveClass(/\barmed\b/)
   await pressBuzzer(p1.page)
   await expect(p1.page.locator('.buzzer-label')).toHaveText('回答してください！')
+  await host.page.getByRole('button', { name: '誤答', exact: true }).click()
   await host.page.getByRole('button', { name: '他チームに開放' }).click()
   await expect(p1.page.locator('.buzzer-label')).toHaveText('誤答のため待機')
   await expect(p3.page.locator('.buzzer-label')).toHaveText('誤答のため待機')

@@ -67,14 +67,18 @@ test('複数端末: 3人参加（1人はスマホ）で押下順・次点・再�
   await expect(first.page.locator('.buzzer-label')).toHaveText('回答してください！')
   await expect(second.page.locator('.buzzer-label')).toHaveText(`${first.nick}さんが回答中`)
 
-  // --- 不正解 → 次点者に権利を回す ---
+  // --- 不正解: 「誤答」はペナルティと回答権の取り上げだけ。進め方は別に選ぶ ---
   await host.page.getByRole('button', { name: '誤答', exact: true }).click()
   await expect(host.page.locator('.order-row', { hasText: nicks[0] }).locator('.badge.ng')).toBeVisible()
-  await expect(host.page.locator('.order-row', { hasText: nicks[1] }).locator('.badge.active')).toBeVisible()
   await expect(first.page.locator('.buzzer-label')).toHaveText('誤答のため待機')
+  await expect(second.page.locator('.buzzer-label')).toHaveText('判定中…') // まだ誰にも回っていない
+  // 次点へ（ボタンに次点の名前が出る）
+  await host.page.getByRole('button', { name: `次点へ（${nicks[1]}さん）` }).click()
+  await expect(host.page.locator('.order-row', { hasText: nicks[1] }).locator('.badge.active')).toBeVisible()
   await expect(second.page.locator('.buzzer-label')).toHaveText('回答してください！')
 
   // --- 不正解 → 全員に再開放（誤答者2人は除外されたまま） ---
+  await host.page.getByRole('button', { name: '誤答', exact: true }).click()
   await host.page.getByRole('button', { name: '全員に再開放' }).click()
   await expect(first.page.locator('.buzzer-label')).toHaveText('誤答のため待機')
   await expect(second.page.locator('.buzzer-label')).toHaveText('誤答のため待機')
@@ -130,9 +134,12 @@ test('次点がいない不正解は「正解者なし」で終わる', async ({
   await pressBuzzer(p1.page)
   await expect(host.page.locator('.badge.active')).toBeVisible()
 
-  // 押したのが1人だけなので次点がなく、正解者なしの結果になる
+  // 押したのが1人だけなので「次点へ」は出ず、正解者なしで終了する
   await host.page.getByRole('button', { name: '誤答', exact: true }).click()
+  await expect(host.page.getByRole('button', { name: /次点へ/ })).toHaveCount(0)
+  await host.page.getByRole('button', { name: '正解者なしで終了' }).click()
   await expect(p1.page.locator('.toast.ng', { hasText: '正解者なし' })).toBeVisible()
+  await expect(host.page.locator('.result-line')).toHaveText('正解者なし')
 
   await p1.context.close()
   await host.context.close()

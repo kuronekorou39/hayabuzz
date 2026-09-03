@@ -76,7 +76,8 @@ describe('出題者の復帰（serialize / restore）', () => {
     game.phase = PHASE.LOCKED
     game.order = [{ playerId: S1, deltaMs: 0 }, { playerId: S2, deltaMs: 5 }]
     game.activePlayerId = S1
-    game.judgeWrongNext() // たろう誤答 → はなこに回答権（判定待ちのまま）
+    game.judgeWrong() // たろう誤答
+    game.passToNext() // はなこに回答権（判定待ちのまま）
 
     const restored = roundTrip(game)
     expect(restored.phase).toBe(PHASE.QUESTION)

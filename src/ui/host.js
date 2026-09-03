@@ -20,7 +20,7 @@ import { createTransport } from '../net/transport.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
 import { backdropDismiss, closeX, el, popupOverlay } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
-import { answerLabel, createAnswerFields, createBankPanel } from './question-bank-ui.js'
+import { ASK_BLOCKED_NOTE, answerLabel, createAnswerFields, createBankPanel } from './question-bank-ui.js'
 import { showToast } from './toast.js'
 
 // saved: この端末に保存しておいた部屋（room-store.js）。渡されたときはその部屋に復帰する
@@ -205,8 +205,8 @@ export function mountHost(app, { saved = null } = {}) {
   // いまどのステップにいるか（0始まり）
   function currentStep() {
     if (game.phase === PHASE.QUESTION || game.phase === PHASE.ARMED) return 1 // 受付停止中も出題の段階
-    if (game.phase === PHASE.LOCKED) return 2
-    return 0 // 出題前・判定後・結果発表中は「次の問題を用意する」段階
+    if (game.phase === PHASE.LOCKED || game.phase === PHASE.RESULT) return 2 // 判定結果の表示中も判定の段階
+    return 0 // 出題前・結果発表中は「次の問題を用意する」段階
   }
 
   function renderSteps() {
@@ -246,21 +246,22 @@ export function mountHost(app, { saved = null } = {}) {
     game.judgeCorrect()
     recordOutcome()
   } })
-  // 「誤答」= 誤答にして次に押した人へ回す（早押しの基本の流れ）。
-  // 別の進め方（全員に再開放・他チームへ）は次の行に置く
-  const wrongNextBtn = el('button', { class: 'btn btn-ng', text: '誤答', onclick: () => {
+  // 「誤答」は回答への応答（ペナルティと回答権の取り上げ）だけ。その後どう進めるかは
+  // 次に出る「進め方」の行で選ぶ（押す前に結果が分かるよう、ボタンに行き先を書く）
+  const wrongBtn = el('button', { class: 'btn btn-ng', text: '誤答', onclick: () => {
     playWrong()
-    game.judgeWrongNext()
-    recordOutcome() // 次点がおらず正解者なしで決着した場合の記録
+    game.judgeWrong()
   } })
-  const wrongOpenBtn = el('button', { class: 'btn btn-ng btn-small', text: '全員に再開放', onclick: () => {
-    playWrong()
-    game.judgeWrongReopen()
+  const passBtn = el('button', { class: 'btn btn-primary', text: '', onclick: () => game.passToNext() })
+  const reopenBtn = el('button', { class: 'btn', text: '', onclick: () => game.reopenAll() })
+  const restartBtn = el('button', { class: 'btn', text: '最初から読み直し', onclick: () => game.reopenAll({ fromStart: true }) })
+  const teamBtn = el('button', { class: 'btn', text: '他チームに開放', onclick: () => game.openOtherTeams() })
+  const noWinnerBtn = el('button', { class: 'btn', text: '正解者なしで終了', onclick: () => {
+    game.endNoWinner()
+    recordOutcome()
   } })
-  const wrongTeamBtn = el('button', { class: 'btn btn-ng btn-small', text: '他チームに開放', onclick: () => {
-    playWrong()
-    game.judgeWrongOpenOtherTeams()
-  } })
+  // 判定結果を閉じて次の出題へ。結果を見せておく時間は出題者が決める
+  const nextQuestionBtn = el('button', { class: 'btn btn-primary', text: '次の問題へ', onclick: () => game.nextQuestion() })
 
   // 一斉回答モードの回答状況と正答宣言
   const answersLine = el('p', { class: 'placeholder answers-line', text: '' })
@@ -643,7 +644,7 @@ export function mountHost(app, { saved = null } = {}) {
   // 対象にし、この部屋でまだ出していないものから選ぶ（出し尽くしたら知らせる）
   const randomBtn = el('button', { class: 'link-btn', text: 'ランダム', onclick: () => {
     if (!canAskNow()) {
-      showToast('出題中は選べません（判定を終えるか、取り消してください）', 'ng')
+      showToast(ASK_BLOCKED_NOTE, 'ng')
       return
     }
     const type = game.rules.answerMode
@@ -664,9 +665,11 @@ export function mountHost(app, { saved = null } = {}) {
 
   // 出題と進行は1枚のカードにまとめ、操作ボタンはその時点で押せるものだけを出す
   const actionRow = el('div', { class: 'action-grid' })
-  const judgeRow = el('div', { class: 'judge-row' }, [correctBtn, wrongNextBtn])
-  // 誤答にしたあとの進め方。基本は「誤答」で足りるので控えめに置く
-  const wrongMoreRow = el('div', { class: 'wrong-more' }, [wrongOpenBtn, wrongTeamBtn])
+  const judgeRow = el('div', { class: 'judge-row' }, [correctBtn, wrongBtn])
+  // 誤答のあとの進め方（中身はそのときの状況で組み立てる）
+  const afterWrongLabel = el('p', { class: 'placeholder', text: '誤答でした。どう進めますか？' })
+  const afterWrongRow = el('div', { class: 'action-grid' })
+  const afterWrongBox = el('div', { class: 'after-wrong' }, [afterWrongLabel, afterWrongRow])
 
   function showGame() {
     app.replaceChildren(
@@ -689,7 +692,7 @@ export function mountHost(app, { saved = null } = {}) {
           orderList,
           resultLine,
           judgeRow,
-          wrongMoreRow,
+          afterWrongBox,
           declareRow,
           actionRow,
         ]),
@@ -752,6 +755,10 @@ export function mountHost(app, { saved = null } = {}) {
       questionInput.value = ''
       askFields.clear()
     }
+    // 結果や結果発表から出題前に戻ったら、前の問題との紐付け（メモ表示・履歴記録）も外す
+    if (game.phase === PHASE.WAITING && (prevPhase === PHASE.RESULT || prevPhase === PHASE.FINAL)) {
+      currentBankId = null
+    }
     prevPhase = game.phase
 
     const connectedCount = [...game.players.values()].filter((p) => p.connected).length
@@ -761,8 +768,8 @@ export function mountHost(app, { saved = null } = {}) {
 
     renderSteps()
     // バッジはステップ表示と足並みをそろえる。①「問題を用意」の間は、
-    // これから出す番号を出す（1問目の前なら Q1、Q1の判定後なら Q2）
-    const preparing = game.phase === PHASE.WAITING || game.phase === PHASE.RESULT
+    // これから出す番号を出す（1問目の前なら Q1）。判定結果の間はその問題の番号のまま
+    const preparing = game.phase === PHASE.WAITING
     const badgeVisible = game.phase !== PHASE.FINAL
     hostQBadge.textContent = badgeVisible ? `Q${preparing ? game.qid + 1 : game.qid}` : ''
     hostQBadge.classList.toggle('ghost', !badgeVisible)
@@ -777,9 +784,9 @@ export function mountHost(app, { saved = null } = {}) {
     }
 
     const mass = game.isMassAnswerMode
-    // 出題できるのは出題前と判定後だけ。表示中・受付中・判定中に出し直すと
-    // 進行中の問題を壊すため、「取り消し」や「受付停止」で戻してから出し直す
-    const canAsk = game.phase === PHASE.WAITING || game.phase === PHASE.RESULT
+    // 出題できるのは出題前だけ。判定結果は「次の問題へ」で閉じてから、
+    // 受付中・判定中は「取り消し」や「受付停止」で戻してから出し直す
+    const canAsk = game.phase === PHASE.WAITING
     finishBtn.textContent = game.phase === PHASE.FINAL ? 'ゲームに戻る' : '結果発表'
 
     // その時点で押せるボタンだけを並べる（非活性のボタンは並べない）。
@@ -790,15 +797,25 @@ export function mountHost(app, { saved = null } = {}) {
     if (mass && game.phase === PHASE.ARMED) actions.push(closeAnswersBtn, cancelBtn)
     if (!mass && game.phase === PHASE.ARMED) actions.push(stopBtn, cancelBtn)
     if (!mass && game.phase === PHASE.LOCKED) actions.push(stopBtn)
+    if (game.phase === PHASE.RESULT) actions.push(nextQuestionBtn)
     actionRow.replaceChildren(...actions)
     actionRow.style.display = actions.length === 0 ? 'none' : ''
     // 「次にこれを押す」1つだけを脈動させて迷わせない（判定は人の判断なので強調しない）
-    const nextUp = canAsk ? showBtn : game.phase === PHASE.QUESTION ? armBtn : mass && game.phase === PHASE.ARMED ? closeAnswersBtn : null
-    for (const button of [showBtn, armBtn, closeAnswersBtn]) {
+    const nextUp = canAsk
+      ? showBtn
+      : game.phase === PHASE.QUESTION
+        ? armBtn
+        : mass && game.phase === PHASE.ARMED
+          ? closeAnswersBtn
+          : game.phase === PHASE.RESULT
+            ? nextQuestionBtn
+            : null
+    for (const button of [showBtn, armBtn, closeAnswersBtn, nextQuestionBtn]) {
       button.classList.toggle('next-up', button === nextUp)
     }
-    // 問題文は入力欄に表示したまま、出題中は編集できないようにする
-    const inputsVisible = game.phase !== PHASE.FINAL
+    // 問題文は入力欄に表示したまま、出題中は編集できないようにする。
+    // 判定結果の間は入力欄を隠し、出した問題・答え・押下順・結果だけを見せる
+    const inputsVisible = game.phase !== PHASE.FINAL && game.phase !== PHASE.RESULT
     questionInput.style.display = inputsVisible ? '' : 'none'
     questionInput.disabled = !canAsk
     // 答え・選択肢の入力欄は回答形式に追従させる
@@ -819,16 +836,35 @@ export function mountHost(app, { saved = null } = {}) {
       buildDeclareButtons()
     }
 
-    // 問題集のメモ（判定基準など）だけ手元に出す。答えと選択肢は入力欄に入っている
+    // 問題集のメモ（判定基準など）は手元に出す。答えは入力欄に入っているが、
+    // 判定結果では入力欄を隠すので答えもここに出す（一斉回答は結果行に正解が出る）
     const bankItem = currentBankId !== null ? bankItems.find((i) => i.id === currentBankId) : undefined
     const memo = bankItem !== undefined ? bankItem.memo : ''
-    answerLine.textContent = memo !== '' ? `メモ: ${memo}` : ''
-    answerLine.className = memo !== '' ? 'answer-note' : 'answer-note hidden'
+    const noteParts = []
+    if (!mass && game.phase === PHASE.RESULT && game.answerText !== '') noteParts.push(`答え: ${game.answerText}`)
+    if (memo !== '') noteParts.push(`メモ: ${memo}`)
+    answerLine.textContent = noteParts.join(' ／ ')
+    answerLine.className = noteParts.length > 0 ? 'answer-note' : 'answer-note hidden'
     // 判定ボタンは誰かが押して判定できるときだけ出す（待機中の画面を静かに保つ）
     const canJudge = !mass && game.phase === PHASE.LOCKED && game.activePlayerId !== null
     judgeRow.style.display = canJudge ? '' : 'none'
-    wrongMoreRow.style.display = canJudge ? '' : 'none'
-    wrongTeamBtn.style.display = game.rules.teams > 0 ? '' : 'none'
+    // 誤答のあとの進め方。次点がいればそれを既定として先頭に置く
+    const choosing = game.isChoosingAfterWrong
+    afterWrongBox.style.display = choosing ? '' : 'none'
+    if (choosing) {
+      const nextId = game.nextCandidateId
+      const nextPlayer = nextId !== null ? game.players.get(nextId) : undefined
+      const serial = game.rules.reveal === 'serial'
+      passBtn.textContent = nextPlayer !== undefined ? `次点へ（${nextPlayer.nick}さん）` : ''
+      reopenBtn.textContent = serial ? '全員に再開放（続きから）' : '全員に再開放'
+      afterWrongRow.replaceChildren(
+        ...(nextPlayer !== undefined ? [passBtn] : []),
+        reopenBtn,
+        ...(serial ? [restartBtn] : []),
+        ...(game.rules.teams > 0 ? [teamBtn] : []),
+        noWinnerBtn,
+      )
+    }
 
     // チーム合計（チーム戦のみ）
     if (game.rules.teams > 0) {

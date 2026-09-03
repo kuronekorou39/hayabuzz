@@ -284,3 +284,70 @@ test('4択問題: 問題集に登録して出題すると選択肢が配信さ�
   await p1.context.close()
   await host.context.close()
 })
+
+test('ランダム: いまの形式の未出題から1問を読み込み、出題した問題は一覧で薄くなる', async ({ browser }) => {
+  test.setTimeout(300_000)
+  const host = await createRoom(browser)
+  const p1 = await joinPlayer(browser, host.code, 'たろう')
+
+  // 問題集が空のときは知らせるだけ
+  await host.page.getByRole('button', { name: 'ランダム' }).click()
+  await expect(host.page.locator('.toast.ng', { hasText: '早押しの問題が問題集にありません' })).toBeVisible()
+
+  // 早押し2問と○×1問を入れる（ランダムはいまの形式＝早押しからだけ選ぶ）
+  await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
+  await host.page.getByRole('button', { name: '取り込み・書き出し' }).click()
+  await host.page.locator('.bank-paste').fill('Q1\tA1\nQ2\tA2')
+  await host.page.getByRole('button', { name: '貼り付けから追加' }).click()
+  await host.page.locator('.paste-type-select').selectOption('ox')
+  await host.page.locator('.bank-paste').fill('○×問題\t○')
+  await host.page.getByRole('button', { name: '貼り付けから追加' }).click()
+  await host.page.locator('.io-overlay .overlay-close').click()
+  await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
+
+  // 1問目: 早押し2問のどちらかが答えごと入り、出題すると一覧で薄くなる
+  await host.page.getByRole('button', { name: 'ランダム' }).click()
+  await expect(host.page.locator('.toast.ok', { hasText: '未出題はあと1問' })).toBeVisible()
+  const first = await host.page.locator('.question-input').inputValue()
+  expect(['Q1', 'Q2']).toContain(first)
+  await expect(host.page.locator('.ask-a-input')).toHaveValue(first.replace('Q', 'A'))
+  await host.page.getByRole('button', { name: '全員に出題' }).click()
+  await expect(p1.page.locator('.question-text')).toContainText(first)
+  await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
+  await expect(host.page.locator('.bank-row.asked')).toHaveCount(1)
+  await expect(host.page.locator('.bank-row.asked')).toContainText(first)
+  await expect(host.page.locator('.bank-row.asked .asked-badge')).toHaveText('出題済')
+  await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
+
+  // 出題中は選べない
+  await host.page.getByRole('button', { name: 'ランダム' }).click()
+  await expect(host.page.locator('.toast.ng', { hasText: '出題中は選べません' })).toBeVisible()
+
+  // 判定まで進めてから2問目: 残った1問が選ばれる
+  await host.page.waitForTimeout(2200)
+  await host.page.getByRole('button', { name: '早押し開始' }).click()
+  await expect(p1.page.locator('.buzzer')).toHaveClass(/\barmed\b/)
+  await pressBuzzer(p1.page)
+  await expect(host.page.locator('.badge.active')).toBeVisible()
+  await host.page.getByRole('button', { name: '正解', exact: true }).click()
+  await host.page.getByRole('button', { name: 'ランダム' }).click()
+  const second = first === 'Q1' ? 'Q2' : 'Q1'
+  await expect(host.page.locator('.question-input')).toHaveValue(second)
+  await host.page.getByRole('button', { name: '全員に出題' }).click()
+  await expect(p1.page.locator('.question-text')).toContainText(second)
+
+  // 早押しの問題を出し尽くしたら知らせる（一覧では2問とも薄い）
+  await host.page.waitForTimeout(2200)
+  await host.page.getByRole('button', { name: '早押し開始' }).click()
+  await expect(p1.page.locator('.buzzer')).toHaveClass(/\barmed\b/)
+  await pressBuzzer(p1.page)
+  await expect(host.page.locator('.badge.active')).toBeVisible()
+  await host.page.getByRole('button', { name: '正解', exact: true }).click()
+  await host.page.getByRole('button', { name: 'ランダム' }).click()
+  await expect(host.page.locator('.toast.ng', { hasText: '早押しの問題はすべて出題済みです' })).toBeVisible()
+  await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
+  await expect(host.page.locator('.bank-row.asked')).toHaveCount(2)
+
+  await p1.context.close()
+  await host.context.close()
+})

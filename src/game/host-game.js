@@ -52,6 +52,11 @@ export class HostGame {
     return this.rules.answerMode !== 'buzzer'
   }
 
+  // この部屋で出題した問題集の問題 id（取り消した出題は含まない）
+  get askedBankIds() {
+    return new Set(this.askedLog.map((e) => e.bankId ?? null).filter((id) => id !== null))
+  }
+
   // ---- 受信メッセージ（検証済みのものだけ渡すこと） ----
 
   handleMessage(msg, peerId) {
@@ -210,7 +215,8 @@ export class HostGame {
   //   answer       : 表示用の答え（判定結果で全員に配信。空なら出さない）
   //   choices      : 4択の選択肢（全員に配信）
   //   plannedCorrect: 一斉回答の正解値（'o'|'x'|'1'〜'4'）。分かっていればワンタップで発表できる
-  showQuestion({ text = '', answer = '', choices = [], plannedCorrect = null } = {}) {
+  //   bankId       : 問題集の問題の id（履歴に残し、この部屋で出題済みかの判定に使う）
+  showQuestion({ text = '', answer = '', choices = [], plannedCorrect = null, bankId = null } = {}) {
     this.questionText = text.trim().slice(0, CONFIG.questionMaxLen)
     this.answerText = answer.trim().slice(0, 200)
     this.choices = choices.slice(0, 4).map((c) => String(c).slice(0, 100))
@@ -226,7 +232,7 @@ export class HostGame {
     this.revealBase = 0 // 読み上げは新しい問題の先頭から
     this.answers.clear()
     this.correctValue = null
-    this.askedLog.push({ qid: this.qid, text: this.questionText, answer: this.answerText, winners: [], wrongs: [], decided: false })
+    this.askedLog.push({ qid: this.qid, text: this.questionText, answer: this.answerText, bankId, winners: [], wrongs: [], decided: false })
     if (this.askedLog.length > 200) this.askedLog.shift()
     this.#changed()
   }

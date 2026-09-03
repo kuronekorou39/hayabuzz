@@ -104,7 +104,14 @@ function formatAskedMeta(item) {
 //   items  : 問題の配列（呼び出し側と共有する。保存はこの中で行う）
 //   onAsk  : 「出題」を押したときの処理。省略すると出題ボタン自体を出さない（編集専用ページ）
 //   canAsk : いま出題できるか（進行中は選ばせない）
-export function createBankPanel({ items, onAsk = null, canAsk = () => true, showTitle = true }) {
+//   askedIds: この部屋で出題済みの問題 id の集合を返す（一覧で薄く示す。編集ページでは不要）
+export function createBankPanel({
+  items,
+  onAsk = null,
+  canAsk = () => true,
+  askedIds = () => new Set(),
+  showTitle = true,
+}) {
   const bankTypeSelect = el('select', { class: 'input bank-type-select' },
     QUESTION_TYPES.map((t) => el('option', { value: t, text: TYPE_LABEL[t] })))
   const bankQInput = el('textarea', { class: 'input bank-q-input', rows: '2', placeholder: '問題文', maxlength: CONFIG.questionMaxLen })
@@ -373,9 +380,11 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true, show
     bankNote.style.display = onAsk !== null && !canAsk() ? '' : 'none'
     // 行そのものが選択ボタン。1問への操作は下部のバーにまとめる
     // （問題ごとにボタンを並べると、ボタンの方が一覧の主役になってしまう）
+    const asked = askedIds()
     bankRows.replaceChildren(
       ...shown.map((item) => {
         const answer = answerLabel(item.type, item.a, item.choices)
+        const askedNow = asked.has(item.id)
         // 答えは常に、出題状況（回数・日付・正解者）は切り替えたときだけ添える
         const meta = [
           answer !== '' ? `答え: ${answer}` : '',
@@ -383,7 +392,7 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true, show
         ].filter((part) => part !== '').join(' · ')
         const selected = item.id === selectedId
         return el('button', {
-          class: `bank-row${selected ? ' selected' : ''}${item.id === editingId ? ' editing' : ''}`,
+          class: `bank-row${selected ? ' selected' : ''}${item.id === editingId ? ' editing' : ''}${askedNow ? ' asked' : ''}`,
           'aria-pressed': String(selected),
           onclick: () => pickRow(item),
         }, [
@@ -392,6 +401,8 @@ export function createBankPanel({ items, onAsk = null, canAsk = () => true, show
           el('span', { class: 'bank-main' }, [
             el('span', { class: 'bank-head' }, [
               el('span', { class: `type-badge type-${item.type}`, text: TYPE_LABEL[item.type] }),
+              // この部屋で出した問題は薄くするだけでなく理由も添える（「選べない」に見えないように）
+              ...(askedNow ? [el('span', { class: 'asked-badge', text: '出題済' })] : []),
               el('span', { class: 'bank-q', text: item.q }),
             ]),
             el('span', { class: 'bank-meta', text: meta }),

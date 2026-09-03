@@ -6,6 +6,7 @@ import {
   filterQuestions,
   importTsv,
   parseImport,
+  pickRandomQuestion,
 } from '../src/game/question-bank.js'
 
 // localStorage を触る関数は使わないが、モジュール読み込み時に参照されても落ちないようにしておく
@@ -168,5 +169,27 @@ describe('一覧の絞り込み', () => {
     const items = build()
     expect(filterQuestions(items, { type: 'buzzer', text: '首都' })).toHaveLength(1)
     expect(filterQuestions(items, { type: 'ox', text: '首都' })).toHaveLength(0)
+  })
+})
+
+describe('ランダムに選ぶ', () => {
+  test('形式で絞り、出題済みを除いた中から選ぶ', () => {
+    const items = []
+    addQuestion(items, { type: 'buzzer', q: 'B1' })
+    addQuestion(items, { type: 'buzzer', q: 'B2' })
+    addQuestion(items, { type: 'ox', q: 'O1', a: 'o' })
+    const [b1, b2] = items
+    expect(pickRandomQuestion(items, { type: 'buzzer', exclude: new Set([b1.id]) })).toBe(b2)
+    // 乱数源を差し替えると先頭・末尾を決め打ちで選べる（○×は候補に入らない）
+    expect(pickRandomQuestion(items, { type: 'buzzer', rand: () => 0 })).toBe(b1)
+    expect(pickRandomQuestion(items, { type: 'buzzer', rand: () => 0.999 })).toBe(b2)
+  })
+
+  test('候補がなければ null', () => {
+    const items = []
+    addQuestion(items, { type: 'buzzer', q: 'B1' })
+    expect(pickRandomQuestion(items, { type: 'ox' })).toBeNull()
+    expect(pickRandomQuestion(items, { type: 'buzzer', exclude: new Set([items[0].id]) })).toBeNull()
+    expect(pickRandomQuestion([], {})).toBeNull()
   })
 })

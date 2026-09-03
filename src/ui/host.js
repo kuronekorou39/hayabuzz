@@ -5,8 +5,10 @@ import { HostGame } from '../game/host-game.js'
 import { PHASE } from '../game/phases.js'
 import { rankMark } from '../game/rank.js'
 import {
+  TYPE_LABEL,
   loadBank,
   markAsked,
+  pickRandomQuestion,
   recordOutcome as recordBankOutcome,
   saveBank,
 } from '../game/question-bank.js'
@@ -171,6 +173,7 @@ export function mountHost(app, { saved = null } = {}) {
       answer: answerLabel(type, raw, choices),
       choices,
       plannedCorrect: type === 'buzzer' ? null : raw,
+      bankId: currentBankId,
     })
   } })
   // 問題文を手で書き換えたら、問題集との紐付けを外す（別の問題になったとみなす）
@@ -622,12 +625,36 @@ export function mountHost(app, { saved = null } = {}) {
   }
 
   // 問題集の UI は編集専用ページと共用（出題つきで組み立てる）
-  const bankPanel = createBankPanel({ items: bankItems, onAsk: loadFromBank, canAsk: canAskNow })
+  const bankPanel = createBankPanel({
+    items: bankItems,
+    onAsk: loadFromBank,
+    canAsk: canAskNow,
+    askedIds: () => game.askedBankIds, // この部屋で出した問題は一覧で薄く示す
+  })
   const bankOverlay = popupOverlay('bank-overlay', bankPanel.root, { wide: true })
   const bankBtn = el('button', { class: 'link-btn', text: '問題集から選ぶ', onclick: () => {
     // いまのルールの回答形式で絞って開く（○×のルールで4択の問題を見せても選べない）
     bankPanel.presetType(game.rules.answerMode)
     bankOverlay.classList.remove('hidden')
+  } })
+  // 問題集から1問を無作為に読み込む。「問題集から選ぶ」と同じく、いまの回答形式の問題だけを
+  // 対象にし、この部屋でまだ出していないものから選ぶ（出し尽くしたら知らせる）
+  const randomBtn = el('button', { class: 'link-btn', text: 'ランダム', onclick: () => {
+    if (!canAskNow()) {
+      showToast('出題中は選べません（判定を終えるか、取り消してください）', 'ng')
+      return
+    }
+    const type = game.rules.answerMode
+    const asked = game.askedBankIds
+    const item = pickRandomQuestion(bankItems, { type, exclude: asked })
+    if (item === null) {
+      const hasAny = bankItems.some((i) => i.type === type)
+      showToast(hasAny ? `${TYPE_LABEL[type]}の問題はすべて出題済みです` : `${TYPE_LABEL[type]}の問題が問題集にありません`, 'ng')
+      return
+    }
+    loadFromBank(item)
+    const remaining = bankItems.filter((i) => i.type === type && !asked.has(i.id)).length - 1
+    showToast(`ランダムに選びました（未出題はあと${remaining}問）`, 'ok')
   } })
 
   // ポップアップは範囲外タップでも閉じる
@@ -649,7 +676,8 @@ export function mountHost(app, { saved = null } = {}) {
         el('div', { class: 'card' }, [
           el('div', { class: 'topbar' }, [
             el('span', { class: 'card-title' }, [el('h2', { text: '出題' }), hostQBadge]),
-            bankBtn, // 出題の材料を選ぶ導線なので、控えめに右端へ置く
+            // 出題の材料を選ぶ導線なので、控えめに右端へ置く
+            el('span', { class: 'card-links' }, [randomBtn, bankBtn]),
           ]),
           stepBar,
           questionInput,

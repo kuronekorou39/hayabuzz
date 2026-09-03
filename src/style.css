@@ -1397,6 +1397,14 @@ input[type='checkbox']:focus-visible {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* 見出しの右に並べる複数のリンク風ボタン */
+.card-links {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
 /* トップバー等の枠なしアイコンボタン */
 .icon-btn {
   border: none;
@@ -1944,6 +1952,11 @@ input[type='checkbox']:focus-visible {
   background: rgba(var(--primary-rgb), 0.16);
 }
 
+/* この部屋で出題済みの問題は薄くして、まだの問題を探しやすくする（選び直しはできる） */
+.bank-row.asked:not(.selected) {
+  opacity: 0.5;
+}
+
 /* 未選択でも幅を取り、選んだときに行の中身がずれないようにする */
 .bank-check {
   flex: none;
@@ -2009,6 +2022,17 @@ input[type='checkbox']:focus-visible {
 .type-badge.type-choice4 {
   color: #ffd94d;
   background: rgba(255, 210, 60, 0.14);
+}
+
+/* この部屋で出題済みの印（形式バッジと同じ大きさで、枠だけの控えめな見た目） */
+.asked-badge {
+  flex: none;
+  font-size: 0.66rem;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 2px 6px;
+  color: var(--dim);
+  border: 1px solid var(--border);
 }
 
 /* 選択中の1問への操作バー。「問題を追加」と同じ位置に差し替えで出す */

@@ -70,3 +70,16 @@ describe('出題履歴（askedLog）', () => {
     game.destroy()
   })
 })
+
+describe('問題集との紐付け', () => {
+  test('出題した問題集の id が履歴に残り、取り消すと消える', () => {
+    const game = makeGame()
+    game.showQuestion({ text: '1問目', bankId: 'bank-1' })
+    game.showQuestion({ text: '2問目' }) // 手入力（問題集の問題ではない）
+    game.showQuestion({ text: '3問目', bankId: 'bank-3' })
+    expect([...game.askedBankIds]).toEqual(['bank-1', 'bank-3'])
+    game.cancelQuestion()
+    expect([...game.askedBankIds]).toEqual(['bank-1'])
+    game.destroy()
+  })
+})

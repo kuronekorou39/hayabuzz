@@ -156,6 +156,14 @@ export function filterQuestions(items, { type = '', text = '' } = {}) {
   })
 }
 
+// 1問を無作為に選ぶ。type で形式を絞り、exclude（出題済みの id の集合）は候補から外す。
+// 候補がなければ null。rand は乱数源（テストで差し替える）
+export function pickRandomQuestion(items, { type = '', exclude = new Set(), rand = Math.random } = {}) {
+  const candidates = items.filter((item) => (type === '' || item.type === type) && !exclude.has(item.id))
+  if (candidates.length === 0) return null
+  return candidates[Math.floor(rand() * candidates.length)]
+}
+
 // 出題時に履歴を積む（結果は判定時に recordOutcome で書き込む）
 export function markAsked(items, id, at) {
   const item = items.find((i) => i.id === id)

@@ -290,9 +290,11 @@ test('ランダム: いまの形式の未出題から1問を読み込み、出�
   const host = await createRoom(browser)
   const p1 = await joinPlayer(browser, host.code, 'たろう')
 
-  // 問題集が空のときは知らせるだけ
+  // 問題集が空のときは知らせるだけ。連打しても同じ知らせは積み上がらない
   await host.page.getByRole('button', { name: 'ランダム' }).click()
-  await expect(host.page.locator('.toast.ng', { hasText: '早押しの問題が問題集にありません' })).toBeVisible()
+  await host.page.getByRole('button', { name: 'ランダム' }).click()
+  await host.page.getByRole('button', { name: 'ランダム' }).click()
+  await expect(host.page.locator('.toast.ng', { hasText: '早押しの問題が問題集にありません' })).toHaveCount(1)
 
   // 早押し2問と○×1問を入れる（ランダムはいまの形式＝早押しからだけ選ぶ）
   await host.page.getByRole('button', { name: '問題集から選ぶ' }).click()
@@ -305,9 +307,10 @@ test('ランダム: いまの形式の未出題から1問を読み込み、出�
   await host.page.locator('.io-overlay .overlay-close').click()
   await host.page.locator('.bank-overlay').getByRole('button', { name: '閉じる' }).click()
 
-  // 1問目: 早押し2問のどちらかが答えごと入り、出題すると一覧で薄くなる
+  // 1問目: 早押し2問のどちらかが答えごと入り（知らせは出さない）、出題すると一覧で薄くなる
   await host.page.getByRole('button', { name: 'ランダム' }).click()
-  await expect(host.page.locator('.toast.ok', { hasText: '未出題はあと1問' })).toBeVisible()
+  await expect(host.page.locator('.question-input')).toHaveValue(/^Q[12]$/)
+  await expect(host.page.locator('.toast', { hasText: 'ランダム' })).toHaveCount(0)
   const first = await host.page.locator('.question-input').inputValue()
   expect(['Q1', 'Q2']).toContain(first)
   await expect(host.page.locator('.ask-a-input')).toHaveValue(first.replace('Q', 'A'))

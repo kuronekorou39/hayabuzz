@@ -652,9 +652,7 @@ export function mountHost(app, { saved = null } = {}) {
       showToast(hasAny ? `${TYPE_LABEL[type]}の問題はすべて出題済みです` : `${TYPE_LABEL[type]}の問題が問題集にありません`, 'ng')
       return
     }
-    loadFromBank(item)
-    const remaining = bankItems.filter((i) => i.type === type && !asked.has(i.id)).length - 1
-    showToast(`ランダムに選びました（未出題はあと${remaining}問）`, 'ok')
+    loadFromBank(item) // 入力欄に問題が入るので、それ以上の知らせは出さない（連打で積み上がる）
   } })
 
   // ポップアップは範囲外タップでも閉じる

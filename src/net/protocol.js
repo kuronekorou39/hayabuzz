@@ -14,6 +14,7 @@ export const MSG = {
   REJECTED: 'rejected', // 参加拒否
   PING: 'ping', // 時刻同期
   STATE: 'state', // 状態スナップショット（全量配信）
+  CLOSED: 'closed', // 出題者が部屋を閉じた（単なる切断と区別し、戻りを待たせない）
 }
 
 // ---- フィールド検証ヘルパ ----
@@ -44,6 +45,7 @@ const SCHEMAS = {
   [MSG.WELCOME]: { playerId: id, resumed: isBool },
   [MSG.REJECTED]: { reason: str(100) },
   [MSG.PING]: { seq: isNum },
+  [MSG.CLOSED]: {},
   [MSG.STATE]: {
     phase: oneOf(Object.values(PHASE)),
     qid: isNum,

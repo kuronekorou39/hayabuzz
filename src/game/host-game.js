@@ -8,9 +8,10 @@ import { PHASE } from './phases.js'
 // 変化のたびに state スナップショットを全 player へ配信する。
 // player からの自己申告値（得点等）は一切受け付けない（プロトコルに存在しない）。
 export class HostGame {
-  constructor({ send, onChange = () => {}, now = () => performance.now() }) {
+  constructor({ send, onChange = () => {}, onPersist = () => {}, now = () => performance.now() }) {
     this.send = send // (msg, peerId?) => void
     this.onChange = onChange // host UI の再描画用
+    this.onPersist = onPersist // 状態が変わるたびに呼ぶ（端末への保存用。時刻同期の更新では呼ばない）
     this.now = now
     this.players = new Map() // sessionId → player 記録（切断後も保持し再接続で引き継ぐ）
     this.phase = PHASE.WAITING
@@ -167,14 +168,19 @@ export class HostGame {
     this.#rejudge()
   }
 
-  // 読み上げ（順次表示）の現在位置を確定させる。押下・停止のタイミングで呼ぶ
-  #freezeReveal() {
-    if (this.rules.reveal !== 'serial' || this.armedAt === null) return
+  // 読み上げ（順次表示）がいまどこまで進んだか（文字数）。受付中は開始からの経過で進み、
+  // それ以外は確定位置のまま（判定待ちで再計算すると、押下で止めた分を二重に足してしまう）
+  #currentReveal() {
+    if (this.rules.reveal !== 'serial' || this.phase !== PHASE.ARMED || this.armedAt === null) {
+      return this.revealBase
+    }
     const elapsedSec = Math.max(0, this.now() - this.armedAt) / 1000
-    this.revealBase = Math.min(
-      this.questionText.length,
-      this.revealBase + this.rules.revealCps * elapsedSec,
-    )
+    return Math.min(this.questionText.length, this.revealBase + this.rules.revealCps * elapsedSec)
+  }
+
+  // 読み上げの現在位置を確定させる。押下・停止のタイミングで呼ぶ
+  #freezeReveal() {
+    this.revealBase = this.#currentReveal()
   }
 
   // 押下順を判定し直す。遅れて届いた「実際はより早い押下」も正しく順位に反映される
@@ -530,6 +536,83 @@ export class HostGame {
     for (const player of this.players.values()) this.#stopSync(player)
   }
 
+  // ---- 端末への保存と復帰（出題者がリロード等で離れても同じ部屋を続けられるように） ----
+
+  // 保存用の状態。時計に依存する値（受付開始時刻・押下時刻・通信の同期）は持ち出さない
+  serialize() {
+    return {
+      phase: this.phase,
+      qid: this.qid,
+      questionText: this.questionText,
+      answerText: this.answerText,
+      choices: [...this.choices],
+      plannedCorrect: this.plannedCorrect,
+      rules: { ...this.rules },
+      revealBase: this.#currentReveal(),
+      order: this.order.map((o) => ({ playerId: o.playerId, deltaMs: o.deltaMs })), // 押下時刻は落とす
+      excluded: [...this.excluded],
+      activePlayerId: this.activePlayerId,
+      result: this.result === null ? null : { ...this.result },
+      answers: [...this.answers.entries()],
+      correctValue: this.correctValue,
+      askedLog: this.askedLog.map((e) => ({ ...e, winners: [...e.winners], wrongs: [...e.wrongs] })),
+      players: [...this.players.values()].map((p) => ({
+        sessionId: p.sessionId,
+        nick: p.nick,
+        score: p.score,
+        handicapMs: p.handicapMs,
+        team: p.team,
+      })),
+    }
+  }
+
+  // serialize() の内容から復元する。参加者は全員「切断中」として戻し、
+  // 再接続（hello）で得点ごと引き継ぐ。早押しの受付中・判定待ちは時計が変わって
+  // 押下時刻を比べられないため、受付停止と同じく問題表示中に戻す
+  // （一斉回答の締め切り後は回答が出そろっているので、そのまま発表できる）
+  restore(saved) {
+    this.destroy()
+    this.players = new Map()
+    for (const p of Array.isArray(saved.players) ? saved.players : []) {
+      this.players.set(p.sessionId, {
+        sessionId: p.sessionId,
+        nick: p.nick,
+        score: p.score,
+        handicapMs: p.handicapMs,
+        team: p.team,
+        peerId: null,
+        connected: false,
+        sync: new PeerSync(),
+        pingTimers: [],
+        refreshInterval: null,
+      })
+    }
+    // 欠けている項目は既定値のまま（保存が一部壊れていても部屋を開けなくならないように）
+    this.phase = Object.values(PHASE).includes(saved.phase) ? saved.phase : PHASE.WAITING
+    this.qid = saved.qid ?? 0
+    this.questionText = saved.questionText ?? ''
+    this.answerText = saved.answerText ?? ''
+    this.choices = [...(saved.choices ?? [])]
+    this.plannedCorrect = saved.plannedCorrect ?? null
+    this.rules = { ...this.rules, ...(saved.rules ?? {}) }
+    this.revealBase = saved.revealBase ?? 0
+    this.armedAt = null
+    this.presses = []
+    this.order = (saved.order ?? []).map((o) => ({ ...o }))
+    this.excluded = new Set(saved.excluded ?? [])
+    this.activePlayerId = saved.activePlayerId ?? null
+    this.result = saved.result ?? null
+    this.answers = new Map(saved.answers ?? [])
+    this.correctValue = saved.correctValue ?? null
+    this.askedLog = (saved.askedLog ?? []).map((e) => ({ ...e, winners: [...e.winners], wrongs: [...e.wrongs] }))
+    if (this.phase === PHASE.ARMED || (this.phase === PHASE.LOCKED && !this.isMassAnswerMode)) {
+      this.phase = PHASE.QUESTION
+      this.order = []
+      this.activePlayerId = null
+      this.answers.clear()
+    }
+  }
+
   // ---- 時刻同期（ping 送信のスケジューリング） ----
 
   #startSync(player) {
@@ -634,5 +717,6 @@ export class HostGame {
   #changed() {
     this.send(this.snapshot()) // 全 player へブロードキャスト
     this.onChange()
+    this.onPersist()
   }
 }

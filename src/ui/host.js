@@ -10,16 +10,19 @@ import {
   recordOutcome as recordBankOutcome,
   saveBank,
 } from '../game/question-bank.js'
+import { clearHostRoom, saveHostRoom } from '../game/room-store.js'
 import { teamMeta, teamTotals } from '../game/teams.js'
 import { diagText } from '../net/diag.js'
-import { validateMessage } from '../net/protocol.js'
+import { MSG, validateMessage } from '../net/protocol.js'
 import { createTransport } from '../net/transport.js'
 import { loadPrefs, savePrefs } from '../prefs.js'
 import { backdropDismiss, closeX, el, popupOverlay } from '../util/dom.js'
 import { randomCode } from '../util/random.js'
 import { answerLabel, createAnswerFields, createBankPanel } from './question-bank-ui.js'
+import { showToast } from './toast.js'
 
-export function mountHost(app) {
+// saved: この端末に保存しておいた部屋（room-store.js）。渡されたときはその部屋に復帰する
+export function mountHost(app, { saved = null } = {}) {
   unlockAudio() // トップ画面のクリック（ユーザー操作）を起点に AudioContext を有効化
   const prefs = loadPrefs()
   setSoundEnabled(prefs.sound)
@@ -31,23 +34,41 @@ export function mountHost(app) {
   let currentBankId = null // いま出題中の問題集の問題（答え・メモの手元表示と履歴記録に使う）
   let outcomeRecorded = false
 
-  const roomCode = randomCode(CONFIG.roomCodeLen)
-  const joinUrl = `${location.origin}${location.pathname}${location.search}#/join/${roomCode}`
-  const transport = createTransport({ role: 'host' })
   const game = new HostGame({
     send: (msg, peerId) => transport.send(msg, peerId),
     onChange: render,
+    onPersist: persist,
   })
+  const resuming = saved !== null
+  if (resuming) {
+    game.restore(saved.game)
+    currentBankId = saved.currentBankId ?? null
+    outcomeRecorded = saved.outcomeRecorded === true
+  }
+  const roomCode = resuming ? saved.roomCode : randomCode(CONFIG.roomCodeLen)
+  const joinUrl = `${location.origin}${location.pathname}${location.search}#/join/${roomCode}`
+  const transport = createTransport({ role: 'host' })
+  // リロードしてもこの部屋に戻れるよう URL に部屋を残す（main.js が保存と突き合わせて復帰する）
+  history.replaceState(null, '', `#/host/${roomCode}`)
+
+  // 進行状態をこの端末に保存する。出題者がリロード等で離れても、トップ画面や URL から
+  // 同じ部屋に復帰できる（回答者は待っていれば自動でつながり直す）
+  function persist() {
+    if (closing) return // 閉じた部屋を保存し直さない（閉じる直前の切断通知などで呼ばれうる）
+    saveHostRoom({ roomCode, savedAt: Date.now(), game: game.serialize(), currentBankId, outcomeRecorded })
+  }
 
   transport.onMessage((raw, peerId) => {
     if (!validateMessage(raw)) return // スキーマ検証に落ちたメッセージは破棄
     game.handleMessage(raw, peerId)
   })
   transport.onPeerLeave((peerId) => game.handlePeerLeave(peerId))
-  // host が消えると部屋ごと終了するため、参加者がいる間は誤リロード/誤クローズに確認を挟む
+  // host が消えると回答者は待たされるため、参加者がいる間は誤リロード/誤クローズに確認を挟む
+  // （復帰はできるが、つなぎ直しに数秒かかる）。部屋を閉じてトップへ戻るときは確認しない
+  let closing = false
   window.addEventListener('beforeunload', (ev) => {
     const hasPlayers = [...game.players.values()].some((p) => p.connected)
-    if (hasPlayers) {
+    if (hasPlayers && !closing) {
       ev.preventDefault()
       ev.returnValue = ''
     }
@@ -212,6 +233,7 @@ export function mountHost(app) {
     recordBankOutcome(bankItems, currentBankId, winner, [...entry.wrongs])
     saveBank(bankItems)
     outcomeRecorded = true
+    persist() // 復帰後に同じ結果を二重に記録しないよう、記録済みであることも保存する
   }
 
   const correctBtn = el('button', { class: 'btn btn-ok', text: '正解', onclick: () => {
@@ -323,9 +345,24 @@ export function mountHost(app) {
     unlockAudio()
     playLock()
   })
+  // 部屋を閉じる: 回答者に終了を伝え、この端末の保存を消してトップへ戻る。
+  // 単にタブを閉じるのと違い、回答者が「出題者が戻るのを待つ」画面のままにならない
+  const closeRoomBtn = el('button', { class: 'btn btn-ng btn-small', text: '部屋を閉じる', onclick: () => {
+    if (!window.confirm('部屋を閉じますか？回答者には終了が伝わり、この部屋には戻れなくなります。')) return
+    closing = true
+    transport.send({ type: MSG.CLOSED })
+    clearHostRoom()
+    game.destroy()
+    // 終了の知らせが届く前に接続を切ってしまわないよう、少し待ってからトップへ
+    setTimeout(() => {
+      history.replaceState(null, '', location.pathname + location.search)
+      location.reload()
+    }, 300)
+  } })
   const hostSettingsCard = el('div', { class: 'card rules-card' }, [
     el('h2', { text: '設定' }),
     el('div', { class: 'settings-row' }, [el('span', { text: '効果音（この端末で鳴らす）' }), volumeSlider]),
+    el('div', { class: 'settings-row' }, [el('span', { text: 'この部屋を終了する' }), closeRoomBtn]),
   ])
   const hostSettingsOverlay = popupOverlay('settings-overlay', hostSettingsCard)
   const settingsBtn = el('button', {
@@ -886,8 +923,25 @@ export function mountHost(app) {
     )
   }
 
-  showGame()
-  openShare() // 部屋を作った直後は共有（QR・URL）を開いた状態で参加者を集める
+  if (resuming) {
+    // 出題中に離れていたなら、問題文と答えを入力欄に戻す（出題中は編集不可のまま表示される）
+    if (game.phase === PHASE.QUESTION || game.phase === PHASE.LOCKED) {
+      const mode = game.rules.answerMode
+      questionInput.value = game.questionText
+      askFields.sync(mode)
+      lastAskFieldsMode = mode
+      askFields.setValues(mode, {
+        raw: mode === 'buzzer' ? game.answerText : game.plannedCorrect ?? '',
+        choices: game.choices,
+      })
+    }
+    showGame()
+    showToast('前の部屋に戻りました', 'ok') // 回答者が自動でつながり直すことはトップ画面で伝えている
+  } else {
+    showGame()
+    openShare() // 部屋を作った直後は共有（QR・URL）を開いた状態で参加者を集める
+  }
   render()
+  persist() // 参加者が来る前にリロードしても、同じルームコードで続けられるように
   transport.join(roomCode).catch(() => {}) // 失敗内容は診断ログに記録済み
 }

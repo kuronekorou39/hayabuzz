@@ -45,11 +45,57 @@ test('基本フロー: 参加→出題→早押し→正解→再接続→部屋
   await expect(p1.page.locator('.conn-overlay')).toBeHidden({ timeout: 60_000 })
   await expect(p1.page.locator('.me-summary')).toContainText('1点')
 
-  // host 切断で player に部屋の終了を明示する
+  // host 切断は player に明示する（出題者は復帰できるので「終了」とは言わず、戻りを待つ）。
+  // 診断ログは畳まれていて、開くと見える
   await host.context.close()
-  await expect(p1.page.locator('.conn-overlay')).toContainText('部屋が終了しました', { timeout: 30_000 })
+  await expect(p1.page.locator('.conn-overlay')).toContainText('出題者との接続が切れました', { timeout: 30_000 })
+  const diag = p1.page.locator('.conn-overlay .overlay-diag')
+  await expect(diag.locator('.diag-log')).toBeHidden()
+  await diag.locator('summary').click()
+  await expect(diag.locator('.diag-log')).toContainText('ピア接続')
 
   await p1.context.close()
+})
+
+test('出題者がリロードしても同じ部屋に復帰でき、回答者は待っていれば自動でつながり直す', async ({ browser }) => {
+  test.setTimeout(300_000)
+  const host = await createRoom(browser)
+  const p1 = await joinPlayer(browser, host.code, 'たろう')
+  await askAndArm(host, '1問目')
+  await expect(p1.page.locator('.buzzer')).toHaveClass(/\barmed\b/)
+  await pressBuzzer(p1.page)
+  await expect(host.page.locator('.badge.active')).toBeVisible()
+  await host.page.getByRole('button', { name: '正解', exact: true }).click()
+  await expect(p1.page.locator('.me-summary')).toContainText('1点')
+
+  // 出題者がリロード（参加者がいるので確認ダイアログが出る）。URL の部屋と端末の保存から復帰する
+  host.page.on('dialog', (dialog) => dialog.accept())
+  await host.page.reload()
+  await expect(host.page.locator('.toast.ok', { hasText: '前の部屋に戻りました' })).toBeVisible()
+  await expect(host.page.locator('.share-overlay')).toBeHidden() // 復帰では共有ポップアップを開かない
+  await expect(host.page.locator('.card-title .q-badge')).toHaveText('Q2') // 問題番号も続きから
+  // 回答者は出題者の戻りを待つ表示になり、戻ると自動でつながり直して得点も残っている
+  await expect(p1.page.locator('.conn-overlay')).toContainText('出題者との接続が切れました', { timeout: 30_000 })
+  await expect(p1.page.locator('.conn-overlay')).toBeHidden({ timeout: 60_000 })
+  await expect(p1.page.locator('.toast.ok', { hasText: '出題者が戻りました' })).toBeVisible()
+  await expect(p1.page.locator('.me-summary')).toContainText('1点')
+  await expect(host.page.locator('.score-row', { hasText: 'たろう' }).locator('.dot.on')).toBeVisible()
+  await expect(host.page.locator('.score-value')).toHaveText('1')
+
+  // そのまま次の問題を続けられる
+  await askAndArm(host, '2問目')
+  await expect(p1.page.locator('.question-text')).toContainText('2問目')
+  await expect(p1.page.locator('.buzzer')).toHaveClass(/\barmed\b/)
+
+  // 出題者が「部屋を閉じる」と回答者には終了が伝わり、出題者はトップへ戻る（前の部屋には戻れない）
+  await host.page.getByRole('button', { name: '設定' }).click()
+  await host.page.getByRole('button', { name: '部屋を閉じる' }).click()
+  await expect(p1.page.locator('.conn-overlay')).toContainText('部屋が終了しました', { timeout: 30_000 })
+  await expect(host.page.getByRole('button', { name: '出題者として部屋を作る' })).toBeVisible()
+  await expect(host.page.getByRole('button', { name: /前の部屋に戻る/ })).toHaveCount(0)
+
+  await p1.context.close()
+  await host.context.close()
 })
 
 test('タブを閉じて別セッションになっても、同名なら得点を引き継いで再入場できる', async ({ browser }) => {

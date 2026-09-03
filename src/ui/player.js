@@ -313,24 +313,33 @@ function startGame(app, roomCode, nick) {
     onclick: () => settingsOverlay.classList.remove('hidden'),
   })
 
-  // --- 接続オーバーレイ（接続中/エラー/部屋終了の全画面表示） ---
+  // --- 接続オーバーレイ（接続中/エラー/出題者の離席・部屋終了の全画面表示） ---
   const overlayTitle = el('h2', { text: '' })
   const overlayMessage = el('p', { text: '' })
-  const overlayDiag = el('div', { class: 'diag-log hidden' })
+  // 診断ログは大半の人には関係ない情報なので、畳んだ状態で置く（開けば見える）
+  const overlayDiagText = el('div', { class: 'diag-log' })
+  const overlayDiag = el('details', { class: 'overlay-diag hidden' }, [
+    el('summary', { text: '診断情報' }),
+    overlayDiagText,
+  ])
+  // ログは時間とともに増えるので、開いた時点の最新を出す
+  overlayDiag.addEventListener('toggle', () => {
+    if (overlayDiag.open) overlayDiagText.textContent = diagText()
+  })
   const overlayButtons = el('div', { class: 'btn-row' })
   const spinner = el('div', { class: 'spinner' })
   const overlay = el('div', { class: 'overlay conn-overlay' }, [
     spinner,
     overlayTitle,
     overlayMessage,
-    overlayDiag,
     overlayButtons,
+    overlayDiag,
   ])
 
   function showOverlay(title, message, buttons, { withSpinner = false, withDiag = false } = {}) {
     overlayTitle.textContent = title
     overlayMessage.textContent = message
-    overlayDiag.textContent = withDiag ? `診断情報:\n${diagText()}` : ''
+    overlayDiag.open = false // 前の画面で開いていても、次の画面では畳んだ状態から
     overlayDiag.classList.toggle('hidden', !withDiag)
     overlayButtons.replaceChildren(...buttons)
     spinner.classList.toggle('hidden', !withSpinner)
@@ -782,7 +791,8 @@ function startGame(app, roomCode, nick) {
   // 切断検出が遅れる・発火しないことがあるため、アプリ層でも監視する）
   let lastHostMsgAt = performance.now()
   let connLost = false
-  let roomEnded = false
+  let roomEnded = false // 出題者が部屋を閉じた（戻ってこない）
+  let hostAway = false // 出題者との接続が切れ、戻ってくるのを待っている
 
   function showConnLost() {
     connLost = true
@@ -821,24 +831,42 @@ function startGame(app, roomCode, nick) {
     hostPeerId = peerId
     playerId = msg.playerId
     lastHostMsgAt = performance.now()
+    connLost = false
     hideOverlay()
     setLeaveGuard(true) // 接続中の誤リロードで部屋から出ないよう確認を挟む
     setStatus('on', '') // 文字は出さない（緑ランプ + state 受信後は ping 表示）
-    if (msg.resumed) showToast('得点を引き継ぎました', 'ok')
+    if (hostAway) {
+      hostAway = false
+      showToast(msg.resumed ? '出題者が戻りました。得点はそのままです' : '出題者が戻りました', 'ok')
+    } else if (msg.resumed) showToast('得点を引き継ぎました', 'ok')
   }
 
-  function showRoomClosed() {
+  // 出題者との接続が切れた。出題者はリロード等のあと同じ部屋に復帰できるので、
+  // 部屋の終了とは決めつけずに戻ってくるのを待つ（戻れば新しいピアとして現れ、自動で参加し直す）
+  function showHostLeft() {
     // 自分の回線が落ちているだけなら部屋はまだ生きている可能性が高い
     if (navigator.onLine === false) {
       showConnLost()
       return
     }
+    hostAway = true
+    hostPeerId = null // 次に現れた出題者へ参加要求（hello）を送り直す
+    setLeaveGuard(false) // 待っている間のリロードは自由
+    setStatus('off', '切断')
+    showOverlay('出題者との接続が切れました', '出題者が部屋に戻ってくると、そのまま再開できます。戻らないときはトップへ戻ってください。', [
+      el('button', { class: 'btn', text: 'トップへ戻る', onclick: goTop }),
+    ], { withSpinner: true, withDiag: true })
+  }
+
+  // 出題者が部屋を閉じた（戻ってこないので待たせない）
+  function showRoomClosed() {
     roomEnded = true
+    hostAway = false
     setLeaveGuard(false) // 部屋が終了した後のリロードは自由
     setStatus('off', '切断')
-    showOverlay('部屋が終了しました', '出題者との接続が切れました。ホストなしでは続行できません。', [
+    showOverlay('部屋が終了しました', '出題者が部屋を閉じました。', [
       el('button', { class: 'btn btn-primary', text: 'トップへ戻る', onclick: goTop }),
-    ], { withDiag: true })
+    ])
   }
 
   transport.onPeerJoin((peerId) => {
@@ -851,7 +879,7 @@ function startGame(app, roomCode, nick) {
   })
 
   transport.onPeerLeave((peerId) => {
-    if (peerId === hostPeerId) showRoomClosed()
+    if (peerId === hostPeerId && !roomEnded) showHostLeft()
   })
 
   transport.onMessage((raw, peerId) => {
@@ -872,6 +900,9 @@ function startGame(app, roomCode, nick) {
     switch (raw.type) {
       case MSG.PING:
         transport.send({ type: MSG.PONG, seq: raw.seq, t: performance.now() }, hostPeerId)
+        break
+      case MSG.CLOSED:
+        showRoomClosed()
         break
       case MSG.STATE: {
         const prev = snapshot

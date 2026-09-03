@@ -7,6 +7,9 @@ export const CONFIG = {
   // DataChannel は信頼配送なので、1周期 + 余裕を超えた無音は回線断とみなせる
   hostSilenceTimeoutMs: 15000,
   maxPlayers: 24,
+  // 出題者が部屋を離れて（リロード・タブを閉じる等）から、同じ部屋に復帰できる時間。
+  // これを過ぎた保存は「前の部屋」として扱わない（古い部屋に戻ってしまわないように）
+  hostRoomTtlMs: 6 * 60 * 60 * 1000,
 
   // シグナリング（WebTorrent トラッカーの WebSocket プロトコルを自前実装で使用）
   signaling: {

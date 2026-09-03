@@ -479,6 +479,16 @@ textarea.input {
   margin: 0 0 12px;
 }
 
+/* 「前の部屋に戻る」の補足（ボタンの直下に寄せる） */
+.resume-note {
+  margin: -6px 0 4px;
+  text-align: center;
+  color: var(--dim);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  text-wrap: balance;
+}
+
 /* ---- 出題者 ---- */
 
 .room-code {
@@ -2202,6 +2212,27 @@ input[type='checkbox']:focus-visible {
 }
 
 .diag-log.hidden {
+  display: none;
+}
+
+/* 接続オーバーレイの診断ログ。大半の人には不要なので畳んでおき、開いたときだけ見せる */
+.overlay-diag {
+  width: 100%;
+  max-width: 40ch;
+}
+
+.overlay-diag summary {
+  cursor: pointer;
+  color: var(--dim);
+  font-size: 0.8rem;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.overlay-diag .diag-log {
+  margin-top: 8px;
+}
+
+.overlay-diag.hidden {
   display: none;
 }
 
